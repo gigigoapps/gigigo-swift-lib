@@ -78,4 +78,8 @@ extension UIView {
             blurEffectView.effect = UIBlurEffect(style: .dark)
         }
     }
+    
+    func removeSubviews() {
+        self.subviews.forEach { $0.removeFromSuperview() }
+    }
 }
