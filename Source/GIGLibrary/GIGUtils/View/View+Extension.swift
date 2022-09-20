@@ -10,19 +10,19 @@ import UIKit
 
 extension UIView {
     
-    func setCornerRadius(to radius: CGFloat = 8) {
+    public func setCornerRadius(to radius: CGFloat = 8) {
         self.layer.cornerRadius = radius
         if #available(iOS 13.0, *) {
             self.layer.cornerCurve = .continuous
         }
     }
     
-    func layout(using constraints: [NSLayoutConstraint]) {
+    public func layout(using constraints: [NSLayoutConstraint]) {
         translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate(constraints)
     }
     
-    func addBlur() {
+    public func addBlur() {
         self.backgroundColor = .clear
         let blurEffect = UIBlurEffect(style: .regular)
         let blurView = UIVisualEffectView(effect: blurEffect)
@@ -32,32 +32,32 @@ extension UIView {
             blurView.widthAnchor.constraint(equalTo: self.widthAnchor)])
     }
     
-    func rotate(degrees: CGFloat) {
+    public func rotate(degrees: CGFloat) {
         let radians = (degrees * .pi) / 180
         self.transform = CGAffineTransform(rotationAngle: radians)
     }
     
-    func width() -> CGFloat {
+    public func width() -> CGFloat {
         self.frame.width
     }
     
-    func height() -> CGFloat {
+    public func height() -> CGFloat {
         self.frame.height
     }
     
-    func set(height: CGFloat) {
+    public func set(height: CGFloat) {
         let size = CGSize(width: self.width(), height: height)
         self.frame.size = size
     }
     
-    func roundCorners(_ corners: UIRectCorner, radius: CGFloat) {
+    public func roundCorners(_ corners: UIRectCorner, radius: CGFloat) {
         let path = UIBezierPath(roundedRect: self.bounds, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
         let mask = CAShapeLayer()
         mask.path = path.cgPath
         self.layer.mask = mask
     }
     
-    func show(alertContainerView: UIView, blurEffectView: UIVisualEffectView) {
+    public func show(alertContainerView: UIView, blurEffectView: UIVisualEffectView) {
         self.isHidden = true
         guard let window = UIApplication.shared.keyWindow else { return }
         window.endEditing(true)
