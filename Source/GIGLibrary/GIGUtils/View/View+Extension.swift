@@ -10,6 +10,27 @@ import UIKit
 
 extension UIView {
     
+    public func width() -> CGFloat {
+        self.frame.width
+    }
+    
+    public func height() -> CGFloat {
+        self.frame.height
+    }
+    
+    public func set(height: CGFloat) {
+        let size = CGSize(width: self.width(), height: height)
+        self.frame.size = size
+    }
+    
+    public func x() -> CGFloat {
+        self.frame.origin.x
+    }
+    
+    public func y() -> CGFloat {
+        self.frame.origin.y
+    }
+    
     public func setCornerRadius(to radius: CGFloat = 8) {
         self.layer.cornerRadius = radius
         if #available(iOS 13.0, *) {
@@ -35,19 +56,6 @@ extension UIView {
     public func rotate(degrees: CGFloat) {
         let radians = (degrees * .pi) / 180
         self.transform = CGAffineTransform(rotationAngle: radians)
-    }
-    
-    public func width() -> CGFloat {
-        self.frame.width
-    }
-    
-    public func height() -> CGFloat {
-        self.frame.height
-    }
-    
-    public func set(height: CGFloat) {
-        let size = CGSize(width: self.width(), height: height)
-        self.frame.size = size
     }
     
     public func roundCorners(_ corners: UIRectCorner, radius: CGFloat) {
