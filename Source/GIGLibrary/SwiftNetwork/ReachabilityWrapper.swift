@@ -14,7 +14,7 @@ public enum NetworkStatus {
     case reachableViaMobileData
 }
 
-public protocol ReachabilityWrapperDelegate: class {
+public protocol ReachabilityWrapperDelegate: AnyObject {
      func reachabilityChanged(with status: NetworkStatus)
 }
 

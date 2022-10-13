@@ -9,7 +9,7 @@
 import Foundation
 import ReplayKit
 
-public protocol ScreenRecordUI: class {
+public protocol ScreenRecordUI: AnyObject {
     func dismissView()
     func showPreview(viewController: UIViewController)
     func errorRecording(error: Error)
@@ -34,7 +34,7 @@ open class ScreenRecord: NSObject {
 // MARK: ScreenRecordInput
 extension ScreenRecord: ScreenRecordInput {
     
-    open func startRecording() {
+    public func startRecording() {
         if #available(iOS 10.0, *) {
             self.recorder.startRecording { [unowned self] (error) in
                 if let unwrappedError = error {
@@ -44,7 +44,7 @@ extension ScreenRecord: ScreenRecordInput {
         }
     }
     
-    open func stopRecording() {
+    public func stopRecording() {
         if #available(iOS 10.0, *) {
             self.recorder.stopRecording { [unowned self] (preview, error) in
                 if let unwrappedPreview = preview {

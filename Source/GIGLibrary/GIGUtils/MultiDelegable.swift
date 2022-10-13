@@ -9,7 +9,7 @@
 import Foundation
 
 //// Protocol for enabling multiple delegation, forwarding delegate messages to multiple objects instead of being restricted to a single delegate object.
-public protocol MultiDelegable: class {
+public protocol MultiDelegable: AnyObject {
     
     /// Delegate type
     associatedtype Observer

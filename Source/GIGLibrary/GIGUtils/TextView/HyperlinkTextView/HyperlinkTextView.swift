@@ -8,7 +8,7 @@
 
 import UIKit
 
-public protocol HyperlinkTextViewDelegate: class {
+public protocol HyperlinkTextViewDelegate: AnyObject {
     func didTapOnHyperlink(URL: URL)
 }
 

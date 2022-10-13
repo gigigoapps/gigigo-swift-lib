@@ -8,7 +8,7 @@
 
 import UIKit
 
-public protocol InfiniteCollectionViewDataSource: class {
+public protocol InfiniteCollectionViewDataSource: AnyObject {
     
     /**
      Provides cell for infinite collection. Works just like the regular `cellForItemAtIndexPath`, however, consumer
@@ -40,7 +40,7 @@ public protocol InfiniteCollectionViewDataSource: class {
 
 }
 
-public protocol InfiniteCollectionViewDelegate: class {
+public protocol InfiniteCollectionViewDelegate: AnyObject {
     
     /**
      Notifies that a cell has been selected.
