@@ -18,6 +18,11 @@ extension UIView {
         self.frame.height
     }
     
+    public func set(width: CGFloat) {
+        let size = CGSize(width: width, height: self.height())
+        self.frame.size = size
+    }
+    
     public func set(height: CGFloat) {
         let size = CGSize(width: self.width(), height: height)
         self.frame.size = size
