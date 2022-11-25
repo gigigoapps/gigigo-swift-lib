@@ -36,6 +36,14 @@ extension UIView {
         self.frame.origin.y
     }
     
+    public func set(x: CGFloat) {
+        self.frame.origin = CGPoint(x: x, y: self.y())
+    }
+    
+    public func set(y: CGFloat) {
+        self.frame.origin = CGPoint(x: self.x(), y: y)
+    }
+    
     public func setCornerRadius(to radius: CGFloat = 8) {
         self.layer.cornerRadius = radius
         if #available(iOS 13.0, *) {
