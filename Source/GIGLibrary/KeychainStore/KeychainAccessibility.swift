@@ -72,13 +72,13 @@ extension KeychainAccessibility: RawRepresentable, CustomStringConvertible {
             self = .whenUnlocked
         case String(kSecAttrAccessibleAfterFirstUnlock):
             self = .afterFirstUnlock
-        case String(kSecAttrAccessibleAlways):
+        case String(kSecAttrAccessibleAfterFirstUnlock):
             self = .always
         case String(kSecAttrAccessibleWhenUnlockedThisDeviceOnly):
             self = .whenUnlockedThisDeviceOnly
         case String(kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly):
             self = .afterFirstUnlockThisDeviceOnly
-        case String(kSecAttrAccessibleAlwaysThisDeviceOnly):
+        case String(kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly):
             self = .alwaysThisDeviceOnly
         default:
             return nil
@@ -92,13 +92,13 @@ extension KeychainAccessibility: RawRepresentable, CustomStringConvertible {
         case .afterFirstUnlock:
             return String(kSecAttrAccessibleAfterFirstUnlock)
         case .always:
-            return String(kSecAttrAccessibleAlways)
+            return String(kSecAttrAccessibleAfterFirstUnlock)
         case .whenUnlockedThisDeviceOnly:
             return String(kSecAttrAccessibleWhenUnlockedThisDeviceOnly)
         case .afterFirstUnlockThisDeviceOnly:
             return String(kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
         case .alwaysThisDeviceOnly:
-            return String(kSecAttrAccessibleAlwaysThisDeviceOnly)
+            return String(kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
         }
     }
 

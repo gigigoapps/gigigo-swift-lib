@@ -92,12 +92,12 @@ extension UIImage {
         let heightRatio = size.height / self.size.height
         let newSize: CGSize
         if widthRatio < heightRatio {
-            newSize = CGSizeMake(self.size.width * heightRatio, self.size.height * heightRatio)
+            newSize = CGSize(width: self.size.width * heightRatio, height: self.size.height * heightRatio)
         } else {
-            newSize = CGSizeMake(self.size.width * widthRatio, self.size.height * widthRatio)
+            newSize = CGSize(width: self.size.width * widthRatio, height: self.size.height * widthRatio)
         }
         UIGraphicsBeginImageContextWithOptions(newSize, false, 0.0)
-        self.draw(in: CGRectMake(0,0,newSize.width,newSize.height))
+        self.draw(in: CGRect(x: 0, y: 0, width: newSize.width, height: newSize.height))
         let newImage = UIGraphicsGetImageFromCurrentImageContext()
         UIGraphicsEndImageContext();
         return newImage;
