@@ -63,14 +63,13 @@ struct ImageDownloader {
             switch response.status {
             case .success:
                 if let image = try? response.image() {
+                    let width = view.width() * UIScreen.main.scale
+                    let height = view.height() * UIScreen.main.scale
                     DispatchQueue(label: "com.gigigo.imagedownloader", qos: .background).async {
                         var finalImage = image
-                        let width = view.width() * UIScreen.main.scale
-                        let height = view.height() * UIScreen.main.scale
                         if let resized = image.imageProportionally(with: CGSize(width: width, height: height)) {
                             finalImage = resized
                         }
-                        
                         DispatchQueue.main.async {
                             if let currentRequest = ImageDownloader.queue[view], request.baseURL == currentRequest.baseURL {
                                 self.setAnimated(image: finalImage, in: view)
