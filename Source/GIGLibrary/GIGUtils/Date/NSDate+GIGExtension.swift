@@ -33,10 +33,10 @@ public extension Date {
 	
 	/// Date from string with ISO format.
     static func dateFromString(_ dateString: String, format: String = DateISOFormat) -> Date? {
-		let dateFormat = DateFormatter()
-		dateFormat.dateFormat = format
-
-		let date = dateFormat.date(from: dateString)
+		let dateFormatter = DateFormatter()
+		dateFormatter.dateFormat = format
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+		let date = dateFormatter.date(from: dateString)
 		return date
 	}
 	
@@ -51,6 +51,7 @@ public extension Date {
     func string(with format: String = DateISOFormat) -> String {
 		let dateFormatter = DateFormatter()
 		dateFormatter.dateFormat = format
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
 		dateFormatter.amSymbol = ""
 		dateFormatter.pmSymbol = ""
 		return dateFormatter.string(from: self)
