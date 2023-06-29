@@ -8,7 +8,7 @@
 
 import Foundation
 import UIKit
-
+import CoreImage.CIFilterBuiltins
 
 open class QR {
     
@@ -35,9 +35,9 @@ open class QR {
 	fileprivate class func generate(_ string: String) -> CIImage? {
         let context = CIContext()
         let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(totalCode.utf8)
-        guard let outputImage = Self.filter.outputImage,
-              let cgimg = Self.context.createCGImage(outputImage, from: outputImage.extent) else {
+        filter.message = Data(string.utf8)
+        guard let outputImage = filter.outputImage,
+              let cgimg = context.createCGImage(outputImage, from: outputImage.extent) else {
                 return nil
         }
         return cgimg
