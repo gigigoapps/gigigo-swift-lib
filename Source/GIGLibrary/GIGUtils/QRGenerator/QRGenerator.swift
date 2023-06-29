@@ -11,7 +11,7 @@ import UIKit
 
 
 open class QR {
-	
+    
 	open class func generate(_ string: String) -> UIImage? {
 		guard let outputImage: CIImage = self.generate(string) else { return nil }
 		let image = UIImage(ciImage: outputImage)
@@ -30,16 +30,16 @@ open class QR {
 		onView.image = UIImage(ciImage: transformedImage)
 	}
 	
-	
 	// MARK: - Private Helpers
 	
 	fileprivate class func generate(_ string: String) -> CIImage? {
-		let stringData = string.data(using: String.Encoding.utf8)
-		let filter = CIFilter(name: "CIQRCodeGenerator")
-		filter?.setValue(stringData, forKey: "inputMessage")
-		filter?.setValue("H", forKey: "inputCorrectionLevel")
-		
-		return filter?.outputImage
+        let context = CIContext()
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(totalCode.utf8)
+        guard let outputImage = Self.filter.outputImage,
+              let cgimg = Self.context.createCGImage(outputImage, from: outputImage.extent) else {
+                return nil
+        }
+        return cgimg
 	}
-	
 }
