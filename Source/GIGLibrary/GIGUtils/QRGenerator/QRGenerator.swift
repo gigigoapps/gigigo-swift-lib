@@ -29,6 +29,21 @@ open class QR {
 		
 		onView.image = UIImage(ciImage: transformedImage)
 	}
+    
+    static func create(string: String) -> UIImage {
+        if #available(iOS 13.0, *) {
+            let context = CIContext()
+            let filter = CIFilter.qrCodeGenerator()
+            filter.message = Data(string.utf8)
+            guard let outputImage = filter.outputImage,
+                  let cgimg = context.createCGImage(outputImage, from: outputImage.extent) else {
+                return UIImage()
+            }
+            return UIImage(cgImage: cgimg)
+        }
+        
+        return UIImage()
+    }
 	
 	// MARK: - Private Helpers
 	
