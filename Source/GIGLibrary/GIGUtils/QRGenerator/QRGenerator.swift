@@ -13,21 +13,21 @@ import CoreImage.CIFilterBuiltins
 open class QR {
     
 	open class func generate(_ string: String) -> UIImage? {
-		guard let outputImage: CIImage = self.generate(string) else { return nil }
-		let image = UIImage(ciImage: outputImage)
+		guard let outputImage: CGImage = self.generate(string) else { return nil }
+		let image = UIImage(cgImage: outputImage)
 		
 		return image
 	}
 	
 	open class func generate(_ string: String, onView: UIImageView) {
-		guard let image: CIImage = self.generate(string) else { return }
+		guard let image: CGImage = self.generate(string) else { return }
 		
 		let scaleX = onView.frame.size.width / image.extent.size.width
 		let scaleY = onView.frame.size.height / image.extent.size.height
 		
 		let transformedImage = image.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
 		
-		onView.image = UIImage(ciImage: transformedImage)
+		onView.image = UIImage(cgImage: transformedImage)
 	}
 	
 	// MARK: - Private Helpers
