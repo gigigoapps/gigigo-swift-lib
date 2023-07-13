@@ -46,7 +46,8 @@ open class QR {
         if #available(iOS 13.0, *) {
             let filter = CIFilter.qrCodeGenerator()
             filter.message = Data(string.utf8)
-            guard let outputImage = filter.outputImage,
+            let transform = CGAffineTransform(scaleX: 10, y: 10)
+            guard let outputImage = filter.outputImage?.transformed(by: transform),
                   let cgimg = context.createCGImage(outputImage, from: outputImage.extent) else {
                     return nil
             }
