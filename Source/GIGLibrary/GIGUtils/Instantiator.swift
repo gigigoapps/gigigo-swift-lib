@@ -14,7 +14,7 @@ public enum ErrorInstantiation: Error {
     case instantiateIntial
 }
 
-public protocol Instantiable {
+@MainActor public protocol Instantiable {
     static var storyboard: String {get}
     static var bundle: Bundle {get}
     static var identifier: String {get}
@@ -59,4 +59,5 @@ public extension Instantiable {
         return downcastedVC
     }
 }
+
 
