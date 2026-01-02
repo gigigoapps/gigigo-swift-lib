@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 //
 //  GIGMainAlert.swift
 //  GIGLibrary
@@ -44,3 +45,4 @@ open class Alert: NSObject {
 
     }
 }
+#endif

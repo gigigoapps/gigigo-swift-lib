@@ -7,6 +7,8 @@
 //
 
 import Foundation
+
+#if canImport(Security) && canImport(LocalAuthentication)
 import Security
 import LocalAuthentication
 
@@ -519,3 +521,4 @@ extension CFError {
         return NSError(domain: domain, code: code, userInfo: userInfo)
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 
 // MARK: PUBLIC
@@ -597,3 +598,4 @@ extension UIFont {
 }
 
 // swiftlint:enable cyclomatic_complexity
+#endif

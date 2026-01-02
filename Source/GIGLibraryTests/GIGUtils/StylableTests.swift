@@ -1,4 +1,6 @@
+#if canImport(UIKit)
 import XCTest
+import UIKit
 import GIGLibrary
 
 class StylableTests: XCTestCase {
@@ -118,3 +120,4 @@ class StylableTests: XCTestCase {
         XCTAssertEqual(sut.layer.borderColor, UIColor.red.cgColor)
     }
 }
+#endif

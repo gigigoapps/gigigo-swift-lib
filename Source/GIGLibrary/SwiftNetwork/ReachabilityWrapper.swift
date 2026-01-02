@@ -1,3 +1,4 @@
+#if canImport(SystemConfiguration)
 //
 //  ReachabilityWrapper.swift
 //  WOAH
@@ -108,3 +109,4 @@ public class ReachabilityWrapper: ReachabilityInput {
         }
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 
 extension UIView: ViewStylable {
@@ -37,3 +38,4 @@ extension UIView: ViewStylable {
         }
     }
 }
+#endif

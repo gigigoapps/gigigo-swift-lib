@@ -7,8 +7,13 @@
 //
 
 import Foundation
+
+#if canImport(CoreData)
 import CoreData
 
+#endif
+
+#if canImport(CoreData)
 public extension NSManagedObjectContext {
 	
     func createEntity(_ name: String) -> NSManagedObject? {
@@ -33,3 +38,4 @@ public extension NSManagedObjectContext {
 		return results as? [NSManagedObject]
 	}
 }
+#endif

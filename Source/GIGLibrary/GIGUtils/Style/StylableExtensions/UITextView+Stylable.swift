@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 
 extension UITextView: Stylable {
@@ -11,3 +12,4 @@ extension UITextView: Stylable {
         }
 	}
 }
+#endif

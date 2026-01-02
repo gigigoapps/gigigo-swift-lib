@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 //
 //  Instantiator.swift
 //  GIGLibrary
@@ -59,5 +60,4 @@ public extension Instantiable {
         return downcastedVC
     }
 }
-
-
+#endif

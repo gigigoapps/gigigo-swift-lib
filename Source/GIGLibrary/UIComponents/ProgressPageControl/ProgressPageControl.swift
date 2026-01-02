@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 //
 //  ProgressPageControl.swift
 //  OCM
@@ -219,3 +220,4 @@ import UIKit
         self.initializeView()
     }
 }
+#endif

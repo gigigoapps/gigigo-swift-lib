@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 //
 //  Storyboard+Extension.swift
 //  Zeus
@@ -27,3 +28,4 @@ extension UIStoryboard {
 	}
 	
 }
+#endif

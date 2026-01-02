@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 
 extension UIButton: Stylable {
@@ -22,3 +23,4 @@ extension UIButton: Stylable {
         }
 	}
 }
+#endif

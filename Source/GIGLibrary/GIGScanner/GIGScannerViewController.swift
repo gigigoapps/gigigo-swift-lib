@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 //
 //  GIGScannerViewController.swift
 //  GiGLibrary
@@ -174,3 +175,4 @@ open class GIGScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 	}
 	
 }
+#endif

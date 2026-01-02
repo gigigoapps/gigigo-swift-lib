@@ -1,3 +1,4 @@
+#if canImport(Security)
 //
 //  KeychainAuthenticationPolicy.swift
 //  GIGLibrary
@@ -82,3 +83,4 @@ public struct KeychainAuthenticationPolicy: OptionSet {
         self.rawValue = rawValue
     }
 }
+#endif

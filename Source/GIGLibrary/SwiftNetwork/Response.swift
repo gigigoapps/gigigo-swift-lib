@@ -1,3 +1,5 @@
+#if canImport(SystemConfiguration)
+#if canImport(UIKit)
 //
 //  Response.swift
 //  MCDonald
@@ -257,3 +259,5 @@ public extension Response {
         return url.pathExtension == "gif"
     }
 }
+#endif
+#endif

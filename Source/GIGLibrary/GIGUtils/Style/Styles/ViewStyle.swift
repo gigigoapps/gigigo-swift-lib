@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 import UIKit
 
 public struct ViewStyle {
@@ -37,3 +38,4 @@ public struct ViewStyle {
         self.backgroundColor = backgroundColor
     }
 }
+#endif

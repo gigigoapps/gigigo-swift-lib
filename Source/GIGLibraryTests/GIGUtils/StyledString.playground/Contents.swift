@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 //: Playground - noun: a place where people can play
 
 import UIKit
@@ -57,3 +58,4 @@ label.html = "texto <b>importante</b>"
 // MARK: Example 2
 
 label.html = "texto <b style=\"color:red;\">importante</b>"
+#endif

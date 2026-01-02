@@ -1,3 +1,4 @@
+#if canImport(Security)
 //
 //  KeychainOptions.swift
 //  GIGLibrary
@@ -76,3 +77,4 @@ extension KeychainOptions {
         return (attributes, nil)
     }
 }
+#endif

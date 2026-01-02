@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 //
 //  QRGenerator.swift
 //  GIGLibrary
@@ -65,3 +66,4 @@ open class QR {
         }
 	}
 }
+#endif

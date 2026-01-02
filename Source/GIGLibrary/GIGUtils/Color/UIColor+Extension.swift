@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 //
 //  UIColor+Extension.swift
 //  wally
@@ -34,3 +35,4 @@ extension UIColor {
     }
     
 }
+#endif

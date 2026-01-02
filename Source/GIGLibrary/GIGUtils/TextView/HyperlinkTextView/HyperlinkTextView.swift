@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 //
 //  HyperlinkTextView.swift
 //  GIGLibrary
@@ -138,3 +139,4 @@ open class HyperlinkTextView: UITextView {
         self.attributedText = attributedText
     }
 }
+#endif

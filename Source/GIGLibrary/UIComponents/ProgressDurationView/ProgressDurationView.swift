@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 //
 //  ProgressDurationView.swift
 //  GIGLibrary
@@ -65,3 +66,4 @@ import UIKit
         }
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if canImport(UIKit)
 //
 //  Keyboard.swift
 //  AppliverySDK
@@ -208,3 +209,4 @@ extension UIView.AnimationCurve {
         return UIView.AnimationOptions(rawValue: UInt(rawValue << 16))
 	}
 }
+#endif
