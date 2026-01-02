@@ -10,9 +10,9 @@ struct RequestTests {
         let configuration = URLSessionConfiguration.testConfiguration()
         var capturedRequest: URLRequest?
 
-        MockURLProtocol.respond { request in
+        MockURLProtocol.respond(capture: { request in
             capturedRequest = request
-        }
+        })
 
         let request = Request(
             method: HTTPMethod.post.rawValue,
@@ -57,9 +57,9 @@ struct RequestTests {
         let configuration = URLSessionConfiguration.testConfiguration()
         var capturedRequest: URLRequest?
 
-        MockURLProtocol.respond { request in
+        MockURLProtocol.respond(capture: { request in
             capturedRequest = request
-        }
+        })
 
         let request = Request(
             method: HTTPMethod.post.rawValue,
@@ -99,9 +99,9 @@ struct RequestTests {
         let configuration = URLSessionConfiguration.testConfiguration()
         var didReceiveRequest = false
 
-        MockURLProtocol.respond { _ in
+        MockURLProtocol.respond(capture: { _ in
             didReceiveRequest = true
-        }
+        })
 
         let request = Request(
             method: HTTPMethod.get.rawValue,
