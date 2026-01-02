@@ -1,4 +1,3 @@
-#if canImport(Security)
 //
 //  Status.swift
 //  GIGLibrary
@@ -1237,4 +1236,3 @@ extension Status: RawRepresentable, CustomStringConvertible {
         }
     }
 }
-#endif

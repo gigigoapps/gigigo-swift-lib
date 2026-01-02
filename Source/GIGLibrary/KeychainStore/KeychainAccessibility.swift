@@ -1,4 +1,3 @@
-#if canImport(Security)
 //
 //  KeychainAccessibility.swift
 //  GIGLibrary
@@ -120,4 +119,3 @@ extension KeychainAccessibility: RawRepresentable, CustomStringConvertible {
         }
     }
 }
-#endif

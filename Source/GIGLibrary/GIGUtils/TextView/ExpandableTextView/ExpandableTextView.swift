@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 //
 //  ExpandableTextView.xib.swift
 //  GIGLibrary
@@ -75,4 +74,3 @@ open class ExpandableTextView: UIView {
         self.hyperlinkTextView.setText(htmlText: shortText)
     }
 }
-#endif

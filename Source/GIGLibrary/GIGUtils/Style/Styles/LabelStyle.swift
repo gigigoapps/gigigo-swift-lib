@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 import UIKit
 
 public struct LabelStyle {
@@ -13,4 +12,3 @@ public struct LabelStyle {
         self.viewStyle = viewStyle
     }
 }
-#endif

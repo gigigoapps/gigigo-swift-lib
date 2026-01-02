@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 //
 //  GIGActionSheet.swift
 //  GIGLibrary
@@ -16,4 +15,3 @@ open class ActionSheet: AlertController {
         super.init(title: title, message: message, style: .actionSheet)
     }
 }
-#endif

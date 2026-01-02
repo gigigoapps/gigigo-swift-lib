@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 import UIKit
 
 public struct TextStyle {
@@ -23,4 +22,3 @@ public struct TextStyle {
         self.letterSpacing = letterSpacing
     }
 }
-#endif

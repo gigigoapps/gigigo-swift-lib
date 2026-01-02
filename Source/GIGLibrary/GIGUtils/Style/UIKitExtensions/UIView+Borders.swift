@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 import UIKit
 
 public enum Border: Int {
@@ -87,4 +86,3 @@ public extension UIView {
 		self.layer.mask = mask
 	}
 }
-#endif

@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 //
 //  File.swift
 //  GIGLibrary
@@ -55,4 +54,3 @@ open class AlertController: NSObject, AlertInterface {
         self.alert.addAction(action)
     }
 }
-#endif

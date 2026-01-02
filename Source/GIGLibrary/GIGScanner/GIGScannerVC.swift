@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 //
 //  GIGScannerVC.swift
 //  Orchextra
@@ -145,4 +144,3 @@ open class GIGScannerVC: UIViewController, AVCaptureMetadataOutputObjectsDelegat
 		}
 	}
 }
-#endif

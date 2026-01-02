@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 //
 //  Application.swift
 //  GIGLibrary
@@ -63,4 +62,3 @@ open class Application {
 	}
 	
 }
-#endif

@@ -1,4 +1,3 @@
-#if canImport(SystemConfiguration)
 //
 //  Request.swift
 //  MCDonald
@@ -467,4 +466,3 @@ func concat(_ lhs: [URLQueryItem]?, _ rhs: [URLQueryItem]?) -> [URLQueryItem] {
 	
 	return left + right
 }
-#endif

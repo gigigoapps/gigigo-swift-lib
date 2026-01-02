@@ -1,4 +1,3 @@
-#if canImport(Security)
 //
 //  KeychainConstants.swift
 //  GIGLibrary
@@ -59,4 +58,3 @@ struct KeychainConstants {
     @available(iOS 9.0, *)
     static let UseAuthenticationUIFail = String(kSecUseAuthenticationUIFail)
 }
-#endif

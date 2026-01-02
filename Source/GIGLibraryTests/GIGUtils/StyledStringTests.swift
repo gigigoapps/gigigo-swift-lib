@@ -6,9 +6,7 @@
 //  Copyright © 2016 Gigigo SL. All rights reserved.
 //
 
-#if canImport(UIKit)
 import XCTest
-import UIKit
 import GIGLibrary
 
 class StyledStringTests: XCTestCase {
@@ -180,4 +178,3 @@ private func equalColors (_ c1:UIColor, c2:UIColor) -> Bool{
     return (Int(green*255) == Int(green2*255))
     
 }
-#endif

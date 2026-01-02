@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 import UIKit
 
 extension UITextField: Stylable {
@@ -13,4 +12,3 @@ extension UITextField: Stylable {
         }
     }
 }
-#endif

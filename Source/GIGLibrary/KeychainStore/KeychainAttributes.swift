@@ -1,4 +1,3 @@
-#if canImport(Security)
 //
 //  KeychainAttributes.swift
 //  GIGLibrary
@@ -92,4 +91,3 @@ extension Attributes: CustomStringConvertible, CustomDebugStringConvertible {
         return self.description
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 //
 //  InfiniteCollectionView.swift
 //  GIGLibrary
@@ -322,4 +321,3 @@ extension InfiniteCollectionView: UIScrollViewDelegate {
     }
 
 }
-#endif

@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 import UIKit
 
 public struct ButtonStyle {
@@ -21,4 +20,3 @@ public struct ButtonStyle {
         self.backgroundImage = backgroundImage
     }
 }
-#endif

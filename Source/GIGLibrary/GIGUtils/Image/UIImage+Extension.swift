@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 //
 //  UIImageExtension.swift
 //  GiGLibrary
@@ -225,4 +224,3 @@ extension UIImage {
     
     
 }
-#endif

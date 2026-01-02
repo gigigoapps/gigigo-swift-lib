@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 //
 //  UIView+Extension.swift
 //  wally
@@ -105,4 +104,3 @@ extension UIView {
         self.subviews.forEach { $0.removeFromSuperview() }
     }
 }
-#endif

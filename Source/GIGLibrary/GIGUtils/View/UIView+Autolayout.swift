@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 //
 //  UIView+Extension.swift
 //  MCDonald
@@ -38,4 +37,3 @@ public extension UIView {
     }
     
 }
-#endif

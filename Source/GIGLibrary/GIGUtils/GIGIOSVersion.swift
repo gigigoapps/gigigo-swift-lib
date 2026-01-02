@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 //
 //  GIGIOSVersion.swift
 //  GIGLibrary
@@ -15,4 +14,3 @@ let iosVersion = NSString(string: Device.systemVersion).doubleValue
 
 let MAJORTHANIOS8 = (iosVersion > 8.0)
 let iOS7 = (iosVersion < 8)
-#endif

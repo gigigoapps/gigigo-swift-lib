@@ -7,8 +7,6 @@
 //
 
 import Foundation
-
-#if canImport(ReplayKit)
 import ReplayKit
 
 public protocol ScreenRecordUI: AnyObject {
@@ -68,4 +66,3 @@ extension ScreenRecord: RPPreviewViewControllerDelegate {
         self.view?.dismissView()
     }
 }
-#endif

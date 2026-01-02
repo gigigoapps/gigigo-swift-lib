@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 import UIKit
 
 extension UILabel: Stylable {
@@ -16,4 +15,3 @@ extension UILabel: Stylable {
         }
     }
 }
-#endif

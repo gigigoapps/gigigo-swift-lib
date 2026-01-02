@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 import UIKit
 
 public struct TextFieldStyle {
@@ -20,4 +19,3 @@ public struct TextFieldStyle {
         self.viewStyle = viewStyle
     }
 }
-#endif

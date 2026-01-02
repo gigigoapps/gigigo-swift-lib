@@ -1,4 +1,3 @@
-#if canImport(UIKit)
 //
 //  ImageDownloader.swift
 //  GIGLibrary
@@ -107,4 +106,3 @@ struct ImageDownloader {
     }
     
 }
-#endif
