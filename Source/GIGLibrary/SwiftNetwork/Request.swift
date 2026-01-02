@@ -58,10 +58,12 @@ open class Request: Selfie {
 	
 	private var request: URLRequest?
 	private weak var task: URLSessionTask?
-    private let reachability: ReachabilityWrapper = ReachabilityWrapper.shared
+    private let reachability: ReachabilityInput
+    private let sessionConfiguration: URLSessionConfiguration?
+    private let session: URLSession?
     
     // TODO , para versiones futuras borrar este metodo
-    public convenience init(method: String, baseUrl: String, endpoint: String, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false) {
+    public convenience init(method: String, baseUrl: String, endpoint: String, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, reachability: ReachabilityInput = ReachabilityWrapper.shared) {
         self.init(
             method: method,
             baseUrl: baseUrl,
@@ -71,11 +73,14 @@ open class Request: Selfie {
             bodyParams: bodyParams,
             timeout: timeout,
             verbose: verbose,
-            standard: .gigigo
+            standard: .gigigo,
+            sessionConfiguration: sessionConfiguration,
+            session: session,
+            reachability: reachability
         )
     }
     
-    public convenience init(method: String, baseUrl: String, endpoint: String, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo) {
+    public convenience init(method: String, baseUrl: String, endpoint: String, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, reachability: ReachabilityInput = ReachabilityWrapper.shared) {
         self.init(method: method,
             baseUrl: baseUrl,
             endpoint: endpoint,
@@ -85,10 +90,13 @@ open class Request: Selfie {
             timeout: timeout,
             verbose: verbose,
             standard: standard,
-            logInfo: nil)
+            logInfo: nil,
+            sessionConfiguration: sessionConfiguration,
+            session: session,
+            reachability: reachability)
     }
 
-    public init(method: String, baseUrl: String, endpoint: String, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, logInfo: RequestLogInfo? = nil) {
+    public init(method: String, baseUrl: String, endpoint: String, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, logInfo: RequestLogInfo? = nil, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, reachability: ReachabilityInput = ReachabilityWrapper.shared) {
         self.method = method
         self.baseURL = baseUrl
         self.endpoint = endpoint
@@ -99,9 +107,12 @@ open class Request: Selfie {
         self.verbose = verbose
         self.standardType = standard
         self.logInfo = logInfo
+        self.sessionConfiguration = sessionConfiguration
+        self.session = session
+        self.reachability = reachability
     }
 
-    public convenience init(method: HTTPMethod, completeURL: URL, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo) {
+    public convenience init(method: HTTPMethod, completeURL: URL, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, reachability: ReachabilityInput = ReachabilityWrapper.shared) {
         self.init(method: method,
             completeURL: completeURL, 
             headers: headers, 
@@ -110,10 +121,13 @@ open class Request: Selfie {
             timeout: timeout,
             verbose: verbose,
             standard: standard,
-            logInfo: nil)
+            logInfo: nil,
+            sessionConfiguration: sessionConfiguration,
+            session: session,
+            reachability: reachability)
     }
 
-    public init(method: HTTPMethod, completeURL: URL, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, logInfo: RequestLogInfo? = nil) {
+    public init(method: HTTPMethod, completeURL: URL, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, logInfo: RequestLogInfo? = nil, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, reachability: ReachabilityInput = ReachabilityWrapper.shared) {
         self.method = method.rawValue
         self.completeURL = completeURL
         self.baseURL = completeURL.absoluteString
@@ -125,6 +139,9 @@ open class Request: Selfie {
         self.verbose = verbose
         self.standardType = standard
         self.logInfo = logInfo
+        self.sessionConfiguration = sessionConfiguration
+        self.session = session
+        self.reachability = reachability
     }
     
 	open func fetch(completionHandler: @escaping (Response) -> Void) {
@@ -138,13 +155,7 @@ open class Request: Selfie {
         self.logRequest()
 		self.cancel()
         
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForResource = self.timeout
-        if #available(iOS 11, *) {
-            configuration.waitsForConnectivity = true
-        }
-        self.controlCache(config: configuration)
-        let session = URLSession(configuration: configuration, delegate: self as? URLSessionDelegate, delegateQueue: nil)
+        let session = self.configuredSession(applyCache: true)
         
 		self.task = session.dataTask(with: request) { data, urlResponse, error in
             
@@ -177,12 +188,7 @@ open class Request: Selfie {
         self.logRequest()
         self.cancel()
         
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForResource = self.timeout
-        if #available(iOS 11, *) {
-            configuration.waitsForConnectivity = true
-        }
-        let session = URLSession(configuration: configuration, delegate: self as? URLSessionDelegate, delegateQueue: nil)
+        let session = self.configuredSession(applyCache: false)
 
         self.task = session.downloadTask(with: request) { location, response, error in
             guard let location = location else {
@@ -241,12 +247,7 @@ open class Request: Selfie {
         self.logRequest()
         self.cancel()
         
-        let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForResource = self.timeout
-        if #available(iOS 11, *) {
-            configuration.waitsForConnectivity = true
-        }
-        let session = URLSession(configuration: configuration, delegate: self as? URLSessionDelegate, delegateQueue: nil)
+        let session = self.configuredSession(applyCache: false)
         
         self.task = session.uploadTask(with: request, from: nil, completionHandler: { data, urlResponse, error in
             
@@ -279,6 +280,22 @@ open class Request: Selfie {
         default:
             break
         }
+    }
+
+    private func configuredSession(applyCache: Bool) -> URLSession {
+        if let session = self.session {
+            return session
+        }
+
+        let configuration = self.sessionConfiguration ?? URLSessionConfiguration.default
+        configuration.timeoutIntervalForResource = self.timeout
+        if #available(iOS 11, *) {
+            configuration.waitsForConnectivity = true
+        }
+        if applyCache {
+            self.controlCache(config: configuration)
+        }
+        return URLSession(configuration: configuration, delegate: self as? URLSessionDelegate, delegateQueue: nil)
     }
 	
     fileprivate func printLog(_ message: String, logInfo: RequestLogInfo) {
