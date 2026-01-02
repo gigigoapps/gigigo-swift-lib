@@ -19,4 +19,4 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Run iOS tests
-        run: xcodebuild -scheme GIGLibrary-Package -destination 'platform=iOS Simulator,name=iPhone 14,OS=latest' test
+        run: xcodebuild -scheme GIGLibrary-Package -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' test
