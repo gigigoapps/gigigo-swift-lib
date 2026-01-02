@@ -59,4 +59,4 @@ jobs:
               output_file.write(f"udid={preferred['udid']}\\n")
           PY
       - name: Run iOS tests
-        run: xcodebuild -scheme GIGLibrary-Package -destination "id=${{ steps.simulator.outputs.udid }}" test
+        run: xcodebuild -scheme GIGLibrary -destination "id=${{ steps.simulator.outputs.udid }}" test
