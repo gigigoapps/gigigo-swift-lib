@@ -34,7 +34,8 @@ struct RequestTests {
 
         // Then
         let urlRequest = try #require(capturedRequest)
-        let components = try #require(URLComponents(url: try #require(urlRequest.url), resolvingAgainstBaseURL: false))
+        let requestURL = try #require(urlRequest.url)
+        let components = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false))
         let queryItems = components.queryItems ?? []
         let queryDictionary = Dictionary(uniqueKeysWithValues: queryItems.map { ($0.name, $0.value) })
         let bodyObject = try #require(urlRequest.httpBody)
