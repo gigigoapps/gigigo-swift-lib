@@ -18,5 +18,45 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Select iOS Simulator
+        id: simulator
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+
+          preferred_name = "iPhone 17 Pro"
+          data = json.loads(
+              subprocess.check_output(
+                  ["xcrun", "simctl", "list", "-j", "devices", "available"]
+              ).decode("utf-8")
+          )
+
+          def runtime_key(runtime):
+              match = re.search(r"iOS (\\d+(?:\\.\\d+)*)", runtime)
+              if not match:
+                  return (0,)
+              return tuple(int(part) for part in match.group(1).split("."))
+
+          runtimes = sorted(data.get("devices", {}).keys(), key=runtime_key)
+          if not runtimes:
+              raise SystemExit("No iOS runtimes available.")
+
+          latest_runtime = runtimes[-1]
+          devices = data["devices"][latest_runtime]
+          preferred = next((d for d in devices if d["name"] == preferred_name), None)
+          if preferred is None:
+              iphones = [d for d in devices if d["name"].startswith("iPhone")]
+              if not iphones:
+                  raise SystemExit("No iPhone simulators available.")
+              preferred = iphones[-1]
+
+          output_path = os.environ["GITHUB_OUTPUT"]
+          with open(output_path, "a", encoding="utf-8") as output_file:
+              output_file.write(f"name={preferred['name']}\\n")
+              output_file.write(f"udid={preferred['udid']}\\n")
+          PY
       - name: Run iOS tests
-        run: xcodebuild -scheme GIGLibrary-Package -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' test
+        run: xcodebuild -scheme GIGLibrary-Package -destination "id=${{ steps.simulator.outputs.udid }}" test
