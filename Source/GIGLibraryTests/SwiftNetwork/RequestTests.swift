@@ -238,4 +238,61 @@ struct RequestTests {
         #expect(queryValue("foo") == "bar")
         #expect(queryValue("page") == "2")
     }
+
+    @Test("Given an upload request, when upload is called, then it builds a multipart body with boundaries and fields")
+    func uploadBuildsMultipartRequestWithFilesAndParams() async throws {
+        // Given
+        let configuration = URLSessionConfiguration.testConfiguration()
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.respond { request in
+            capturedRequest = request
+        }
+
+        let request = Request.testRequest(
+            method: HTTPMethod.post.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/upload",
+            headers: nil,
+            urlParams: nil,
+            bodyParams: nil,
+            sessionConfiguration: configuration,
+            reachability: MockReachabilityProvider(reachable: true)
+        )
+
+        let fileData = FileUploadData(
+            data: Data("hello".utf8),
+            mimeType: "text/plain",
+            filename: "hello.txt",
+            name: "file"
+        )
+        let params: [String: Any] = [
+            "user": "tester",
+            "count": 1
+        ]
+
+        // When
+        _ = await withCheckedContinuation { continuation in
+            request.upload(files: [fileData], params: params) { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        // Then
+        let urlRequest = try #require(capturedRequest)
+        let contentType = try #require(urlRequest.value(forHTTPHeaderField: "Content-Type"))
+        let body = try #require(urlRequest.httpBody)
+        let bodyString = try #require(String(data: body, encoding: .utf8))
+        let boundary = try #require(contentType.components(separatedBy: "boundary=").last)
+
+        #expect(contentType.starts(with: "multipart/form-data; boundary="))
+        #expect(bodyString.contains("filename=\"hello.txt\""))
+        #expect(bodyString.contains("name=\"file\""))
+        #expect(bodyString.contains("Content-Type: text/plain"))
+        #expect(bodyString.contains("name=\"user\""))
+        #expect(bodyString.contains("tester"))
+        #expect(bodyString.contains("name=\"count\""))
+        #expect(bodyString.contains("1"))
+        #expect(bodyString.contains("--\(boundary)"))
+    }
 }
