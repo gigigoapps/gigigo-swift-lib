@@ -123,4 +123,49 @@ struct RequestTests {
         #expect(response.status == .noInternet)
         #expect(didReceiveRequest == false)
     }
+
+    @Test("Given a complete URL with query params, when fetch is called, then it merges existing and new params without appending the endpoint")
+    func fetchBuildsRequestWithCompleteURLAndUrlParams() async throws {
+        // Given
+        let configuration = URLSessionConfiguration.testConfiguration()
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.respond { request in
+            capturedRequest = request
+        }
+
+        let completeURL = try #require(URL(string: "https://example.com/api/resource?existing=one&token=abc"))
+        let request = Request(
+            method: .get,
+            completeURL: completeURL,
+            headers: nil,
+            urlParams: ["foo": "bar", "page": 2],
+            bodyParams: nil,
+            sessionConfiguration: configuration,
+            reachability: MockReachabilityProvider(reachable: true)
+        )
+        request.endpoint = "/should-not-append"
+
+        // When
+        _ = await withCheckedContinuation { continuation in
+            request.fetch { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        // Then
+        let urlRequest = try #require(capturedRequest)
+        let requestURL = try #require(urlRequest.url)
+        let components = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false))
+        let queryItems = components.queryItems ?? []
+        let queryValue = { (name: String) in
+            queryItems.first(where: { $0.name == name })?.value
+        }
+
+        #expect(components.path == "/api/resource")
+        #expect(queryValue("existing") == "one")
+        #expect(queryValue("token") == "abc")
+        #expect(queryValue("foo") == "bar")
+        #expect(queryValue("page") == "2")
+    }
 }
