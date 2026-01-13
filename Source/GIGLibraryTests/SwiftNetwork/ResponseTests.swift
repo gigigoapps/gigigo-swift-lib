@@ -92,4 +92,26 @@ struct ResponseTests {
         #expect(response.data?.toDictionary()?["message"] as? String == "Hello")
         #expect(response.data?.toDictionary()?["count"] as? Int == 2)
     }
+
+    @Test("Given NSError codes without URL response, when Response parses, then it maps to expected ResponseStatus")
+    func responseMapsNSErrorCodesToResponseStatus() {
+        // Given
+        let cases: [(Int, ResponseStatus)] = [
+            (401, .sessionExpired),
+            (-1001, .timeout),
+            (-1009, .noInternet),
+            (-1202, .untrustedCertificate),
+            (42, .unknownError)
+        ]
+
+        for (code, expectedStatus) in cases {
+            let error = NSError(domain: NSURLErrorDomain, code: code, message: "Test error")
+
+            // When
+            let response = Response(data: nil, response: nil, error: error)
+
+            // Then
+            #expect(response.status == expectedStatus)
+        }
+    }
 }
