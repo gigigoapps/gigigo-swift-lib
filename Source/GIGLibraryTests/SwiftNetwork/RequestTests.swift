@@ -295,4 +295,76 @@ struct RequestTests {
         #expect(bodyString.contains("1"))
         #expect(bodyString.contains("--\(boundary)"))
     }
+
+    @Test("Given a download request with a temporary destination, when fetch is called, then it saves the file and returns status code 200")
+    func fetchDownloadSavesFileToTemporaryDirectory() async throws {
+        // Given
+        let configuration = URLSessionConfiguration.testConfiguration()
+        let fileData = Data("downloaded content".utf8)
+        let destinationURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+
+        defer {
+            try? FileManager.default.removeItem(at: destinationURL)
+        }
+
+        MockURLProtocol.respond(data: fileData)
+
+        let request = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/download",
+            sessionConfiguration: configuration,
+            reachability: MockReachabilityProvider(reachable: true)
+        )
+
+        // When
+        let response = await withCheckedContinuation { continuation in
+            request.fetch(withDownloadUrlFile: destinationURL) { response in
+                continuation.resume(returning: response)
+            }
+        }
+
+        // Then
+        #expect(FileManager.default.fileExists(atPath: destinationURL.path))
+        let savedData = try #require(Data(contentsOf: destinationURL))
+        #expect(savedData == fileData)
+        #expect(response.statusCode == 200)
+    }
+
+    @Test("Given a download request with an existing destination file, when fetch is called, then it overwrites the file")
+    func fetchDownloadOverwritesExistingFile() async throws {
+        // Given
+        let configuration = URLSessionConfiguration.testConfiguration()
+        let originalData = Data("original content".utf8)
+        let updatedData = Data("updated content".utf8)
+        let destinationURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+
+        try originalData.write(to: destinationURL)
+        defer {
+            try? FileManager.default.removeItem(at: destinationURL)
+        }
+
+        MockURLProtocol.respond(data: updatedData)
+
+        let request = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/download-overwrite",
+            sessionConfiguration: configuration,
+            reachability: MockReachabilityProvider(reachable: true)
+        )
+
+        // When
+        let response = await withCheckedContinuation { continuation in
+            request.fetch(withDownloadUrlFile: destinationURL) { response in
+                continuation.resume(returning: response)
+            }
+        }
+
+        // Then
+        #expect(FileManager.default.fileExists(atPath: destinationURL.path))
+        let savedData = try #require(Data(contentsOf: destinationURL))
+        #expect(savedData == updatedData)
+        #expect(response.statusCode == 200)
+    }
 }
