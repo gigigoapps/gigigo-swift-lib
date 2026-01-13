@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import GIGLibrary
 
-@Suite
+@Suite(.serialized)
 struct RequestTests {
     @Test("Given a POST request with body params, when fetch is called, then URL, headers, and body are built correctly")
     func fetchBuildsRequestWithBodyParams() async throws {
