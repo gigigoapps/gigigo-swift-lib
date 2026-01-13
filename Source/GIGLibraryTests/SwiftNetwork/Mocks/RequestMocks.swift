@@ -33,6 +33,31 @@ final class MockURLProtocol: URLProtocol {
 }
 
 extension MockURLProtocol {
+    private static func requestBody(from request: URLRequest) -> Data? {
+        if let body = request.httpBody {
+            return body
+        }
+
+        guard let stream = request.httpBodyStream else {
+            return nil
+        }
+
+        stream.open()
+        defer { stream.close() }
+
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 1024)
+        while stream.hasBytesAvailable {
+            let bytesRead = stream.read(&buffer, maxLength: buffer.count)
+            if bytesRead > 0 {
+                data.append(buffer, count: bytesRead)
+            } else {
+                break
+            }
+        }
+        return data
+    }
+
     static func respond(
         statusCode: Int = 200,
         headers: [String: String]? = nil,
@@ -40,7 +65,11 @@ extension MockURLProtocol {
         _ capture: ((URLRequest) -> Void)? = nil
     ) {
         requestHandler = { request in
-            capture?(request)
+            var capturedRequest = request
+            if capturedRequest.httpBody == nil, let body = requestBody(from: request) {
+                capturedRequest.httpBody = body
+            }
+            capture?(capturedRequest)
             let response = HTTPURLResponse.fake(url: request.url!, statusCode: statusCode, headers: headers)
             return (response, data)
         }
