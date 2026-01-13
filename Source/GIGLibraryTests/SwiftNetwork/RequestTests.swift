@@ -94,6 +94,41 @@ struct RequestTests {
         #expect(bodyJson?.last?["id"] as? Int == 2)
     }
 
+    @Test("Given a GET request with empty body params and headers, when fetch is called, then it does not add a body or Content-Type header")
+    func fetchDoesNotSetBodyOrContentTypeForEmptyGet() async throws {
+        // Given
+        let configuration = URLSessionConfiguration.testConfiguration()
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.respond { request in
+            capturedRequest = request
+        }
+
+        let request = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/v1/empty",
+            headers: [:],
+            urlParams: nil,
+            bodyParams: [:],
+            sessionConfiguration: configuration,
+            reachability: MockReachabilityProvider(reachable: true)
+        )
+
+        // When
+        _ = await withCheckedContinuation { continuation in
+            request.fetch { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        // Then
+        let urlRequest = try #require(capturedRequest)
+
+        #expect(urlRequest.httpBody == nil)
+        #expect(urlRequest.value(forHTTPHeaderField: "Content-Type") == nil)
+    }
+
     @Test("Given reachability is offline, when fetch is called, then it returns a no-internet response")
     func fetchReturnsNoInternetWhenOffline() async {
         // Given
