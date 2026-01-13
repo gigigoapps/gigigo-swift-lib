@@ -4,7 +4,10 @@ import Testing
 
 @Suite(.serialized)
 struct ResponseTests {
-    private func makeJSONResponse(body: [String: Any]) throws -> Response {
+    private func makeJSONResponse(
+        body: [String: Any],
+        standardType: StandardType = .gigigo
+    ) throws -> Response {
         let data = try JSONSerialization.data(withJSONObject: body, options: [])
         let url = try #require(URL(string: "https://example.com"))
         let response = HTTPURLResponse.fake(
@@ -12,7 +15,7 @@ struct ResponseTests {
             statusCode: 200,
             headers: ["Content-Type": "application/json"]
         )
-        return Response(data: data, response: response, error: nil, standardType: .gigigo)
+        return Response(data: data, response: response, error: nil, standardType: standardType)
     }
 
     @Test("Given JSON status true with data, when Response parses, then it is success and data points to the data node")
@@ -71,5 +74,22 @@ struct ResponseTests {
         #expect(response.error?.domain == kGIGNetworkErrorDomain)
         #expect(response.error?.code == 15000)
         #expect(response.error?.userInfo[kGIGNetworkErrorMessage] as? String == "Invalid token")
+    }
+
+    @Test("Given a JSON response with basic standard type, when Response parses, then data keeps the full JSON and status is success")
+    func responseParsesBasicJsonKeepingFullBody() throws {
+        // Given
+        let body: [String: Any] = [
+            "message": "Hello",
+            "count": 2
+        ]
+        // When
+        let response = try makeJSONResponse(body: body, standardType: .basic)
+
+        // Then
+        #expect(response.status == .success)
+        #expect(response.statusCode == 200)
+        #expect(response.data?.toDictionary()?["message"] as? String == "Hello")
+        #expect(response.data?.toDictionary()?["count"] as? Int == 2)
     }
 }
