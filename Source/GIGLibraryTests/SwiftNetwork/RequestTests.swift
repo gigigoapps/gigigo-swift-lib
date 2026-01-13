@@ -326,7 +326,7 @@ struct RequestTests {
 
         // Then
         #expect(FileManager.default.fileExists(atPath: destinationURL.path))
-        let savedData = try #require(Data(contentsOf: destinationURL))
+        let savedData = try Data(contentsOf: destinationURL)
         #expect(savedData == fileData)
         #expect(response.statusCode == 200)
     }
@@ -363,7 +363,7 @@ struct RequestTests {
 
         // Then
         #expect(FileManager.default.fileExists(atPath: destinationURL.path))
-        let savedData = try #require(Data(contentsOf: destinationURL))
+        let savedData = try Data(contentsOf: destinationURL)
         #expect(savedData == updatedData)
         #expect(response.statusCode == 200)
     }
