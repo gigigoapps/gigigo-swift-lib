@@ -94,6 +94,41 @@ struct RequestTests {
         #expect(bodyJson?.last?["id"] as? Int == 2)
     }
 
+    @Test("Given a POST request with a custom Content-Type header, when fetch is called, then it keeps the custom value and does not inject application/json")
+    func fetchKeepsCustomContentTypeHeader() async throws {
+        // Given
+        let configuration = URLSessionConfiguration.testConfiguration()
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.respond { request in
+            capturedRequest = request
+        }
+
+        let request = Request.testRequest(
+            method: HTTPMethod.post.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/custom-content-type",
+            headers: ["Content-Type": "application/custom"],
+            urlParams: nil,
+            bodyParams: ["status": "ok"],
+            sessionConfiguration: configuration,
+            reachability: MockReachabilityProvider(reachable: true)
+        )
+
+        // When
+        _ = await withCheckedContinuation { continuation in
+            request.fetch { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        // Then
+        let urlRequest = try #require(capturedRequest)
+
+        #expect(urlRequest.value(forHTTPHeaderField: "Content-Type") == "application/custom")
+        #expect(urlRequest.value(forHTTPHeaderField: "Content-Type") != "application/json")
+    }
+
     @Test("Given a GET request with empty body params and headers, when fetch is called, then it does not add a body or Content-Type header")
     func fetchDoesNotSetBodyOrContentTypeForEmptyGet() async throws {
         // Given
