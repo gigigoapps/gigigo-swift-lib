@@ -58,6 +58,18 @@ extension MockURLProtocol {
         return data
     }
 
+    private static func prepareCapturedRequest(
+        _ request: URLRequest,
+        _ capture: ((URLRequest) -> Void)?
+    ) -> URLRequest {
+        var capturedRequest = request
+        if capturedRequest.httpBody == nil, let body = requestBody(from: request) {
+            capturedRequest.httpBody = body
+        }
+        capture?(capturedRequest)
+        return capturedRequest
+    }
+
     static func respond(
         statusCode: Int = 200,
         headers: [String: String]? = nil,
@@ -65,14 +77,78 @@ extension MockURLProtocol {
         _ capture: ((URLRequest) -> Void)? = nil
     ) {
         requestHandler = { request in
-            var capturedRequest = request
-            if capturedRequest.httpBody == nil, let body = requestBody(from: request) {
-                capturedRequest.httpBody = body
-            }
-            capture?(capturedRequest)
+            _ = prepareCapturedRequest(request, capture)
             let response = HTTPURLResponse.fake(url: request.url!, statusCode: statusCode, headers: headers)
             return (response, data)
         }
+    }
+
+    static func respond(
+        fixture name: String,
+        statusCode: Int = 200,
+        headers: [String: String]? = ["Content-Type": "application/json"],
+        _ capture: ((URLRequest) -> Void)? = nil
+    ) {
+        requestHandler = { request in
+            _ = prepareCapturedRequest(request, capture)
+            let data = try FixtureLoader.data(named: name)
+            let response = HTTPURLResponse.fake(url: request.url!, statusCode: statusCode, headers: headers)
+            return (response, data)
+        }
+    }
+
+    static func respond(
+        routes: [FixtureRoute],
+        _ capture: ((URLRequest) -> Void)? = nil
+    ) {
+        requestHandler = { request in
+            _ = prepareCapturedRequest(request, capture)
+
+            guard let url = request.url else {
+                throw FixtureRouteError.invalidRequest
+            }
+
+            let path = url.path
+            let method = request.httpMethod ?? ""
+
+            guard let route = routes.first(where: { route in
+                let methodMatches = route.method.map { $0.caseInsensitiveCompare(method) == .orderedSame } ?? true
+                return methodMatches && route.path == path
+            }) else {
+                throw FixtureRouteError.unmatchedRoute(method: method, path: path)
+            }
+
+            let data = try FixtureLoader.data(named: route.fixture)
+            let response = HTTPURLResponse.fake(url: url, statusCode: route.statusCode, headers: route.headers)
+            return (response, data)
+        }
+    }
+}
+
+enum FixtureRouteError: Error {
+    case invalidRequest
+    case unmatchedRoute(method: String, path: String)
+}
+
+struct FixtureRoute {
+    let method: String?
+    let path: String
+    let fixture: String
+    let statusCode: Int
+    let headers: [String: String]?
+
+    init(
+        method: String? = nil,
+        path: String,
+        fixture: String,
+        statusCode: Int = 200,
+        headers: [String: String]? = ["Content-Type": "application/json"]
+    ) {
+        self.method = method
+        self.path = path
+        self.fixture = fixture
+        self.statusCode = statusCode
+        self.headers = headers
     }
 }
 

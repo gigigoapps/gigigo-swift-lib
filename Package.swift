@@ -26,6 +26,9 @@ let package = Package(
 			dependencies: []),
 		.testTarget(
 			name: "GIGLibraryTests",
-			dependencies: ["GIGLibrary"])
+			dependencies: ["GIGLibrary"],
+			resources: [
+				.process("SwiftNetwork/Fakes/Fixtures")
+			])
 	]
 )
