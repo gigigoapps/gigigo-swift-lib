@@ -109,7 +109,7 @@ extension MockURLProtocol {
             }
 
             let path = url.path
-            let method = request.httpMethod ?? ""
+            let method = request.httpMethod ?? HTTPMethod.get.rawValue
 
             guard let route = routes.first(where: { route in
                 let methodMatches = route.method.map { $0.caseInsensitiveCompare(method) == .orderedSame } ?? true
