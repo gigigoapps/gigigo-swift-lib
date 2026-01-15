@@ -7,7 +7,6 @@ struct RequestTests {
     @Test("Given a POST request with body params, when fetch is called, then URL, headers, and body are built correctly")
     func fetchBuildsRequestWithBodyParams() async throws {
         // Given
-        let configuration = URLSessionConfiguration.testConfiguration()
         var capturedRequest: URLRequest?
 
         MockURLProtocol.respond { request in
@@ -20,9 +19,7 @@ struct RequestTests {
             endpoint: "/v1/test",
             headers: ["Accept": "application/json"],
             urlParams: ["foo": "bar", "page": 2],
-            bodyParams: ["name": "Taylor", "count": 3],
-            sessionConfiguration: configuration,
-            reachability: MockReachabilityProvider(reachable: true)
+            bodyParams: ["name": "Taylor", "count": 3]
         )
 
         // When
@@ -55,7 +52,6 @@ struct RequestTests {
     @Test("Given a POST request with a body params array, when fetch is called, then body and headers are built correctly")
     func fetchBuildsRequestWithBodyParamsArray() async throws {
         // Given
-        let configuration = URLSessionConfiguration.testConfiguration()
         var capturedRequest: URLRequest?
 
         MockURLProtocol.respond { request in
@@ -69,9 +65,7 @@ struct RequestTests {
             bodyParams: nil,
             timeout: nil,
             verbose: false,
-            standard: .gigigo,
-            sessionConfiguration: configuration,
-            reachability: MockReachabilityProvider(reachable: true)
+            standard: .gigigo
         )
         request.bodyParamsArray = [["id": 1], ["id": 2]]
 
@@ -97,7 +91,6 @@ struct RequestTests {
     @Test("Given a POST request with a custom Content-Type header, when fetch is called, then it keeps the custom value and does not inject application/json")
     func fetchKeepsCustomContentTypeHeader() async throws {
         // Given
-        let configuration = URLSessionConfiguration.testConfiguration()
         var capturedRequest: URLRequest?
 
         MockURLProtocol.respond { request in
@@ -110,9 +103,7 @@ struct RequestTests {
             endpoint: "/custom-content-type",
             headers: ["Content-Type": "application/custom"],
             urlParams: nil,
-            bodyParams: ["status": "ok"],
-            sessionConfiguration: configuration,
-            reachability: MockReachabilityProvider(reachable: true)
+            bodyParams: ["status": "ok"]
         )
 
         // When
@@ -132,7 +123,6 @@ struct RequestTests {
     @Test("Given a GET request with empty body params and headers, when fetch is called, then it does not add a body or Content-Type header")
     func fetchDoesNotSetBodyOrContentTypeForEmptyGet() async throws {
         // Given
-        let configuration = URLSessionConfiguration.testConfiguration()
         var capturedRequest: URLRequest?
 
         MockURLProtocol.respond { request in
@@ -145,9 +135,7 @@ struct RequestTests {
             endpoint: "/v1/empty",
             headers: [:],
             urlParams: nil,
-            bodyParams: [:],
-            sessionConfiguration: configuration,
-            reachability: MockReachabilityProvider(reachable: true)
+            bodyParams: [:]
         )
 
         // When
@@ -167,7 +155,6 @@ struct RequestTests {
     @Test("Given reachability is offline, when fetch is called, then it returns a no-internet response")
     func fetchReturnsNoInternetWhenOffline() async {
         // Given
-        let configuration = URLSessionConfiguration.testConfiguration()
         var didReceiveRequest = false
 
         MockURLProtocol.respond { _ in
@@ -178,8 +165,7 @@ struct RequestTests {
             method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/offline",
-            sessionConfiguration: configuration,
-            reachability: MockReachabilityProvider(reachable: false)
+            reachable: false
         )
 
         // When
@@ -197,7 +183,6 @@ struct RequestTests {
     @Test("Given a download request while offline, when fetch is called, then it does not write a file and returns no-internet")
     func fetchDownloadReturnsNoInternetWhenOffline() async {
         // Given
-        let configuration = URLSessionConfiguration.testConfiguration()
         let destinationURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         var didReceiveRequest = false
 
@@ -209,8 +194,7 @@ struct RequestTests {
             method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/offline-download",
-            sessionConfiguration: configuration,
-            reachability: MockReachabilityProvider(reachable: false)
+            reachable: false
         )
 
         // When
@@ -229,7 +213,6 @@ struct RequestTests {
     @Test("Given a complete URL with query params, when fetch is called, then it merges existing and new params without appending the endpoint")
     func fetchBuildsRequestWithCompleteURLAndUrlParams() async throws {
         // Given
-        let configuration = URLSessionConfiguration.testConfiguration()
         var capturedRequest: URLRequest?
 
         MockURLProtocol.respond { request in
@@ -243,7 +226,7 @@ struct RequestTests {
             headers: nil,
             urlParams: ["foo": "bar", "page": 2],
             bodyParams: nil,
-            sessionConfiguration: configuration,
+            sessionConfiguration: .testConfiguration(),
             reachability: MockReachabilityProvider(reachable: true)
         )
         request.endpoint = "/should-not-append"
@@ -274,7 +257,6 @@ struct RequestTests {
     @Test("Given an upload request, when upload is called, then it builds a multipart body with boundaries and fields")
     func uploadBuildsMultipartRequestWithFilesAndParams() async throws {
         // Given
-        let configuration = URLSessionConfiguration.testConfiguration()
         var capturedRequest: URLRequest?
 
         MockURLProtocol.respond { request in
@@ -287,9 +269,7 @@ struct RequestTests {
             endpoint: "/upload",
             headers: nil,
             urlParams: nil,
-            bodyParams: nil,
-            sessionConfiguration: configuration,
-            reachability: MockReachabilityProvider(reachable: true)
+            bodyParams: nil
         )
 
         let fileData = FileUploadData(
@@ -331,7 +311,6 @@ struct RequestTests {
     @Test("Given reachability is offline, when upload is called, then it returns a no-internet response and does not send the request")
     func uploadReturnsNoInternetWhenOffline() async {
         // Given
-        let configuration = URLSessionConfiguration.testConfiguration()
         var didReceiveRequest = false
 
         MockURLProtocol.respond { _ in
@@ -345,8 +324,7 @@ struct RequestTests {
             headers: nil,
             urlParams: nil,
             bodyParams: nil,
-            sessionConfiguration: configuration,
-            reachability: MockReachabilityProvider(reachable: false)
+            reachable: false
         )
 
         let fileData = FileUploadData(
@@ -374,7 +352,6 @@ struct RequestTests {
     @Test("Given a download request with a temporary destination, when fetch is called, then it saves the file and returns status code 200")
     func fetchDownloadSavesFileToTemporaryDirectory() async throws {
         // Given
-        let configuration = URLSessionConfiguration.testConfiguration()
         let fileData = Data("downloaded content".utf8)
         let destinationURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 
@@ -387,9 +364,7 @@ struct RequestTests {
         let request = Request.testRequest(
             method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
-            endpoint: "/download",
-            sessionConfiguration: configuration,
-            reachability: MockReachabilityProvider(reachable: true)
+            endpoint: "/download"
         )
 
         // When
@@ -409,7 +384,6 @@ struct RequestTests {
     @Test("Given a download request with an existing destination file, when fetch is called, then it overwrites the file")
     func fetchDownloadOverwritesExistingFile() async throws {
         // Given
-        let configuration = URLSessionConfiguration.testConfiguration()
         let originalData = Data("original content".utf8)
         let updatedData = Data("updated content".utf8)
         let destinationURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -424,9 +398,7 @@ struct RequestTests {
         let request = Request.testRequest(
             method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
-            endpoint: "/download-overwrite",
-            sessionConfiguration: configuration,
-            reachability: MockReachabilityProvider(reachable: true)
+            endpoint: "/download-overwrite"
         )
 
         // When

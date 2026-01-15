@@ -183,8 +183,8 @@ extension Request {
         timeout: TimeInterval? = nil,
         verbose: Bool = false,
         standard: StandardType = .gigigo,
-        sessionConfiguration: URLSessionConfiguration,
-        reachability: ReachabilityInput
+        sessionConfiguration: URLSessionConfiguration = .testConfiguration(),
+        reachable: Bool = true
     ) -> Request {
         return Request(
             method: method,
@@ -197,7 +197,7 @@ extension Request {
             verbose: verbose,
             standard: standard,
             sessionConfiguration: sessionConfiguration,
-            reachability: reachability
+            reachability: MockReachabilityProvider(reachable: reachable)
         )
     }
 }
