@@ -296,6 +296,49 @@ struct RequestTests {
         #expect(bodyString.contains("--\(boundary)"))
     }
 
+    @Test("Given reachability is offline, when upload is called, then it returns a no-internet response and does not send the request")
+    func uploadReturnsNoInternetWhenOffline() async {
+        // Given
+        let configuration = URLSessionConfiguration.testConfiguration()
+        var didReceiveRequest = false
+
+        MockURLProtocol.respond { _ in
+            didReceiveRequest = true
+        }
+
+        let request = Request.testRequest(
+            method: HTTPMethod.post.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/upload-offline",
+            headers: nil,
+            urlParams: nil,
+            bodyParams: nil,
+            sessionConfiguration: configuration,
+            reachability: MockReachabilityProvider(reachable: false)
+        )
+
+        let fileData = FileUploadData(
+            data: Data("offline".utf8),
+            mimeType: "text/plain",
+            filename: "offline.txt",
+            name: "file"
+        )
+        let params: [String: Any] = [
+            "user": "tester"
+        ]
+
+        // When
+        let response = await withCheckedContinuation { continuation in
+            request.upload(files: [fileData], params: params) { response in
+                continuation.resume(returning: response)
+            }
+        }
+
+        // Then
+        #expect(response.status == .noInternet)
+        #expect(didReceiveRequest == false)
+    }
+
     @Test("Given a download request with a temporary destination, when fetch is called, then it saves the file and returns status code 200")
     func fetchDownloadSavesFileToTemporaryDirectory() async throws {
         // Given
