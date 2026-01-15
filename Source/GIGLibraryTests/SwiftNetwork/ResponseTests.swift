@@ -114,4 +114,42 @@ struct ResponseTests {
             #expect(response.status == expectedStatus)
         }
     }
+
+    @Test("Given a 204 JSON response without body, when Response parses, then it is success with no data expected")
+    func responseParsesSuccessWithNoContentBody() throws {
+        // Given
+        let url = try #require(URL(string: "https://example.com"))
+        let httpResponse = HTTPURLResponse.fake(
+            url: url,
+            statusCode: 204,
+            headers: ["Content-Type": "application/json"]
+        )
+
+        // When
+        let response = Response(data: nil, response: httpResponse, error: nil)
+
+        // Then
+        #expect(response.status == .success)
+        #expect(response.statusCode == 204)
+        #expect(response.data == nil)
+    }
+
+    @Test("Given a 200 JSON response with empty body, when Response parses, then it is success with no data expected")
+    func responseParsesSuccessWithEmptyBody() throws {
+        // Given
+        let url = try #require(URL(string: "https://example.com"))
+        let httpResponse = HTTPURLResponse.fake(
+            url: url,
+            statusCode: 200,
+            headers: ["Content-Type": "application/json"]
+        )
+
+        // When
+        let response = Response(data: Data(), response: httpResponse, error: nil)
+
+        // Then
+        #expect(response.status == .success)
+        #expect(response.statusCode == 200)
+        #expect(response.data == nil)
+    }
 }
