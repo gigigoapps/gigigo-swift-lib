@@ -194,6 +194,38 @@ struct RequestTests {
         #expect(didReceiveRequest == false)
     }
 
+    @Test("Given a download request while offline, when fetch is called, then it does not write a file and returns no-internet")
+    func fetchDownloadReturnsNoInternetWhenOffline() async {
+        // Given
+        let configuration = URLSessionConfiguration.testConfiguration()
+        let destinationURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        var didReceiveRequest = false
+
+        MockURLProtocol.respond { _ in
+            didReceiveRequest = true
+        }
+
+        let request = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/offline-download",
+            sessionConfiguration: configuration,
+            reachability: MockReachabilityProvider(reachable: false)
+        )
+
+        // When
+        let response = await withCheckedContinuation { continuation in
+            request.fetch(withDownloadUrlFile: destinationURL) { response in
+                continuation.resume(returning: response)
+            }
+        }
+
+        // Then
+        #expect(response.status == .noInternet)
+        #expect(FileManager.default.fileExists(atPath: destinationURL.path) == false)
+        #expect(didReceiveRequest == false)
+    }
+
     @Test("Given a complete URL with query params, when fetch is called, then it merges existing and new params without appending the endpoint")
     func fetchBuildsRequestWithCompleteURLAndUrlParams() async throws {
         // Given
