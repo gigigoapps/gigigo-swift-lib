@@ -7,7 +7,7 @@ struct SwiftNetworkIntegrationTests {
     @Test("Given a request and the success fixture, when fetch is called, then response matches fixture success")
     func fetchReturnsSuccessFixtureResponse() async throws {
         // Given
-        MockURLProtocol.respond(fixture: "success", statusCode: 200)
+        MockURLProtocol.respond(path: "/success", fixture: "success", statusCode: 200)
         let request = Request.testRequest(
             method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
@@ -32,7 +32,7 @@ struct SwiftNetworkIntegrationTests {
     @Test("Given a request and the api error fixture, when fetch is called, then response matches fixture error")
     func fetchReturnsApiErrorFixtureResponse() async throws {
         // Given
-        MockURLProtocol.respond(fixture: "api_error", statusCode: 400)
+        MockURLProtocol.respond(path: "/error", fixture: "api_error", statusCode: 400)
         let request = Request.testRequest(
             method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",

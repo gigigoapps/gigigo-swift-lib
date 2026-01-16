@@ -9,7 +9,7 @@ struct RequestTests {
         // Given
         var capturedRequest: URLRequest?
 
-        MockURLProtocol.respond { request in
+        MockURLProtocol.respond(path: "/api/v1/test") { request in
             capturedRequest = request
         }
 
@@ -54,7 +54,7 @@ struct RequestTests {
         // Given
         var capturedRequest: URLRequest?
 
-        MockURLProtocol.respond { request in
+        MockURLProtocol.respond(path: "/items") { request in
             capturedRequest = request
         }
 
@@ -93,7 +93,7 @@ struct RequestTests {
         // Given
         var capturedRequest: URLRequest?
 
-        MockURLProtocol.respond { request in
+        MockURLProtocol.respond(path: "/custom-content-type") { request in
             capturedRequest = request
         }
 
@@ -125,7 +125,7 @@ struct RequestTests {
         // Given
         var capturedRequest: URLRequest?
 
-        MockURLProtocol.respond { request in
+        MockURLProtocol.respond(path: "/v1/empty") { request in
             capturedRequest = request
         }
 
@@ -157,7 +157,7 @@ struct RequestTests {
         // Given
         var didReceiveRequest = false
 
-        MockURLProtocol.respond { _ in
+        MockURLProtocol.respond(path: "/offline") { _ in
             didReceiveRequest = true
         }
 
@@ -186,7 +186,7 @@ struct RequestTests {
         let destinationURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         var didReceiveRequest = false
 
-        MockURLProtocol.respond { _ in
+        MockURLProtocol.respond(path: "/offline-download") { _ in
             didReceiveRequest = true
         }
 
@@ -215,7 +215,7 @@ struct RequestTests {
         // Given
         var capturedRequest: URLRequest?
 
-        MockURLProtocol.respond { request in
+        MockURLProtocol.respond(path: "/api/resource") { request in
             capturedRequest = request
         }
 
@@ -259,7 +259,7 @@ struct RequestTests {
         // Given
         var capturedRequest: URLRequest?
 
-        MockURLProtocol.respond { request in
+        MockURLProtocol.respond(path: "/upload") { request in
             capturedRequest = request
         }
 
@@ -313,7 +313,7 @@ struct RequestTests {
         // Given
         var didReceiveRequest = false
 
-        MockURLProtocol.respond { _ in
+        MockURLProtocol.respond(path: "/upload-offline") { _ in
             didReceiveRequest = true
         }
 
@@ -359,7 +359,7 @@ struct RequestTests {
             try? FileManager.default.removeItem(at: destinationURL)
         }
 
-        MockURLProtocol.respond(data: fileData)
+        MockURLProtocol.respond(path: "/download", data: fileData)
 
         let request = Request.testRequest(
             method: HTTPMethod.get.rawValue,
@@ -393,7 +393,7 @@ struct RequestTests {
             try? FileManager.default.removeItem(at: destinationURL)
         }
 
-        MockURLProtocol.respond(data: updatedData)
+        MockURLProtocol.respond(path: "/download-overwrite", data: updatedData)
 
         let request = Request.testRequest(
             method: HTTPMethod.get.rawValue,
