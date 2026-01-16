@@ -1,0 +1,7 @@
+{
+  "status": "KO",
+  "error": {
+    "code": 15001,
+    "message": "Invalid request"
+  }
+}

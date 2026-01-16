@@ -152,4 +152,5 @@ struct ResponseTests {
         #expect(response.statusCode == 200)
         #expect(response.data == nil)
     }
+
 }
