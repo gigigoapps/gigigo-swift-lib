@@ -2,14 +2,7 @@ import Foundation
 @testable import GIGLibrary
 
 final class MockURLProtocol: URLProtocol {
-    private struct RouteHandler {
-        let method: String?
-        let path: String
-        let handler: (URLRequest) throws -> (HTTPURLResponse, Data?)
-    }
-
-    private static let handlerQueue = DispatchQueue(label: "MockURLProtocol.handlers")
-    private static var handlers: [RouteHandler] = []
+    static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data?))?
 
     override class func canInit(with request: URLRequest) -> Bool {
         return true
@@ -20,7 +13,7 @@ final class MockURLProtocol: URLProtocol {
     }
 
     override func startLoading() {
-        guard let handler = MockURLProtocol.handler(for: request) else {
+        guard let handler = MockURLProtocol.requestHandler else {
             preconditionFailure("Request handler is missing.")
         }
 
@@ -37,31 +30,6 @@ final class MockURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
-
-    private static func handler(for request: URLRequest) -> ((URLRequest) throws -> (HTTPURLResponse, Data?))? {
-        guard let url = request.url else {
-            return nil
-        }
-
-        let method = request.httpMethod ?? HTTPMethod.get.rawValue
-
-        return handlerQueue.sync {
-            handlers.last(where: { route in
-                let methodMatches = route.method.map { $0.caseInsensitiveCompare(method) == .orderedSame } ?? true
-                return methodMatches && route.path == url.path
-            })?.handler
-        }
-    }
-
-    private static func registerHandler(
-        method: String?,
-        path: String,
-        handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data?)
-    ) {
-        handlerQueue.sync {
-            handlers.append(RouteHandler(method: method, path: path, handler: handler))
-        }
-    }
 }
 
 extension MockURLProtocol {
@@ -103,14 +71,12 @@ extension MockURLProtocol {
     }
 
     static func respond(
-        path: String,
         statusCode: Int = 200,
         headers: [String: String]? = nil,
         data: Data? = nil,
-        method: String? = nil,
         _ capture: ((URLRequest) -> Void)? = nil
     ) {
-        registerHandler(method: method, path: path) { request in
+        requestHandler = { request in
             _ = prepareCapturedRequest(request, capture)
             let response = HTTPURLResponse.fake(url: request.url!, statusCode: statusCode, headers: headers)
             return (response, data)
@@ -118,14 +84,12 @@ extension MockURLProtocol {
     }
 
     static func respond(
-        path: String,
         fixture name: String,
         statusCode: Int = 200,
         headers: [String: String]? = ["Content-Type": "application/json"],
-        method: String? = nil,
         _ capture: ((URLRequest) -> Void)? = nil
     ) {
-        registerHandler(method: method, path: path) { request in
+        requestHandler = { request in
             _ = prepareCapturedRequest(request, capture)
             let data = try FixtureLoader.data(named: name)
             let response = HTTPURLResponse.fake(url: request.url!, statusCode: statusCode, headers: headers)
@@ -137,18 +101,26 @@ extension MockURLProtocol {
         routes: [FixtureRoute],
         _ capture: ((URLRequest) -> Void)? = nil
     ) {
-        for route in routes {
-            registerHandler(method: route.method, path: route.path) { request in
-                _ = prepareCapturedRequest(request, capture)
+        requestHandler = { request in
+            _ = prepareCapturedRequest(request, capture)
 
-                guard let url = request.url else {
-                    throw FixtureRouteError.invalidRequest
-                }
-
-                let data = try FixtureLoader.data(named: route.fixture)
-                let response = HTTPURLResponse.fake(url: url, statusCode: route.statusCode, headers: route.headers)
-                return (response, data)
+            guard let url = request.url else {
+                throw FixtureRouteError.invalidRequest
             }
+
+            let path = url.path
+            let method = request.httpMethod ?? HTTPMethod.get.rawValue
+
+            guard let route = routes.first(where: { route in
+                let methodMatches = route.method.map { $0.caseInsensitiveCompare(method) == .orderedSame } ?? true
+                return methodMatches && route.path == path
+            }) else {
+                throw FixtureRouteError.unmatchedRoute(method: method, path: path)
+            }
+
+            let data = try FixtureLoader.data(named: route.fixture)
+            let response = HTTPURLResponse.fake(url: url, statusCode: route.statusCode, headers: route.headers)
+            return (response, data)
         }
     }
 }
@@ -211,10 +183,9 @@ extension Request {
         timeout: TimeInterval? = nil,
         verbose: Bool = false,
         standard: StandardType = .gigigo,
-        sessionConfiguration: URLSessionConfiguration? = nil,
-        reachable: Bool = true
+        sessionConfiguration: URLSessionConfiguration,
+        reachability: ReachabilityInput
     ) -> Request {
-        let configuration = sessionConfiguration ?? .testConfiguration()
         return Request(
             method: method,
             baseUrl: baseUrl,
@@ -225,8 +196,8 @@ extension Request {
             timeout: timeout,
             verbose: verbose,
             standard: standard,
-            sessionConfiguration: configuration,
-            reachability: MockReachabilityProvider(reachable: reachable)
+            sessionConfiguration: sessionConfiguration,
+            reachability: reachability
         )
     }
 }
