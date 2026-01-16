@@ -242,14 +242,16 @@ open class Request: Selfie {
         }
         
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.httpBody = self.buildUploadData(files: files, params: params, boundary: boundary)
-        self.request = request
+        let bodyData = self.buildUploadData(files: files, params: params, boundary: boundary)
+        var requestForLog = request
+        requestForLog.httpBody = bodyData
+        self.request = requestForLog
         self.logRequest()
         self.cancel()
         
         let session = self.configuredSession(applyCache: false)
         
-        self.task = session.uploadTask(with: request, from: nil, completionHandler: { data, urlResponse, error in
+        self.task = session.uploadTask(with: request, from: bodyData, completionHandler: { data, urlResponse, error in
             
             let response = Response(data: data, response: urlResponse, error: error, standardType: self.standardType)
 
