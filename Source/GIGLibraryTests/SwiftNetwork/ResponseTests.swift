@@ -167,4 +167,49 @@ struct ResponseTests {
         }
     }
 
+    @Test("Given image body is nil, when image is requested, then it throws bodyNil")
+    func imageThrowsWhenBodyIsNil() throws {
+        // Given
+        let url = try #require(URL(string: "https://example.com/image.png"))
+        let response = makeImageResponse(body: nil, url: url)
+
+        // When/Then
+        do {
+            _ = try response.image()
+            #expect(false, "Expected bodyNil error.")
+        } catch let error as ResponseError {
+            #expect(error == .bodyNil)
+        }
+    }
+
+    @Test("Given a GIF URL, when image is requested, then it throws unexpectedDataType")
+    func imageThrowsWhenGifURL() throws {
+        // Given
+        let url = try #require(URL(string: "https://example.com/animated.gif"))
+        let response = makeImageResponse(body: Data([0x00, 0x01, 0x02]), url: url)
+
+        // When/Then
+        do {
+            _ = try response.image()
+            #expect(false, "Expected unexpectedDataType error.")
+        } catch let error as ResponseError {
+            #expect(error == .unexpectedDataType)
+        }
+    }
+
+    @Test("Given invalid image data, when image is requested, then it throws unexpectedDataType")
+    func imageThrowsWhenDataIsInvalid() throws {
+        // Given
+        let url = try #require(URL(string: "https://example.com/image.png"))
+        let response = makeImageResponse(body: Data([0x00, 0x01, 0x02]), url: url)
+
+        // When/Then
+        do {
+            _ = try response.image()
+            #expect(false, "Expected unexpectedDataType error.")
+        } catch let error as ResponseError {
+            #expect(error == .unexpectedDataType)
+        }
+    }
+
 }
