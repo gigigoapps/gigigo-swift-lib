@@ -153,6 +153,20 @@ struct ResponseTests {
         #expect(response.data == nil)
     }
 
+    @Test("Given a response with nil data, when accessing json, then it throws bodyNil")
+    func responseJsonThrowsBodyNilWhenDataIsNil() {
+        // Given
+        let response = Response(data: nil, response: nil, error: nil)
+
+        // When/Then
+        do {
+            _ = try response.json()
+            #expect(false)
+        } catch {
+            #expect(error as? ResponseError == .bodyNil)
+        }
+    }
+
     @Test("Given image body is nil, when image is requested, then it throws bodyNil")
     func imageThrowsWhenBodyIsNil() throws {
         // Given
