@@ -153,6 +153,29 @@ struct ResponseTests {
         #expect(response.data == nil)
     }
 
+    @Test("Given nil response and nil error, when Response initializes, then status is unknownError and statusCode is -1")
+    func responseInitializesWithNilResponseAndError() {
+        // When
+        let response = Response(data: nil, response: nil, error: nil)
+
+        // Then
+        #expect(response.status == .unknownError)
+        #expect(response.statusCode == -1)
+    }
+
+    @Test("Given nil response and nil error, when Response initializes, then it clears response-related properties")
+    func responseInitializesClearingResponseProperties() {
+        // When
+        let response = Response(data: nil, response: nil, error: nil)
+
+        // Then
+        #expect(response.body == nil)
+        #expect(response.data == nil)
+        #expect(response.error == nil)
+        #expect(response.url == nil)
+        #expect(response.headers == nil)
+    }
+
     @Test("Given a response with nil data, when accessing json, then it throws bodyNil")
     func responseJsonThrowsBodyNilWhenDataIsNil() {
         // Given
