@@ -414,4 +414,41 @@ struct RequestTests {
         #expect(savedData == updatedData)
         #expect(response.statusCode == 200)
     }
+
+    @Test("Given cache policies that ignore local data, when fetch is called, then it clears the URL cache")
+    func fetchClearsUrlCacheForIgnoringPolicies() async {
+        // Given
+        let policies: [NSURLRequest.CachePolicy] = [
+            .reloadIgnoringLocalAndRemoteCacheData,
+            .reloadRevalidatingCacheData,
+            .reloadIgnoringLocalCacheData
+        ]
+
+        for policy in policies {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [MockURLProtocol.self]
+            configuration.urlCache = URLCache(memoryCapacity: 1, diskCapacity: 1, diskPath: nil)
+
+            MockURLProtocol.respond(path: "/cache-policy") { _ in }
+
+            let request = Request.testRequest(
+                method: HTTPMethod.get.rawValue,
+                baseUrl: "https://example.com",
+                endpoint: "/cache-policy",
+                sessionConfiguration: configuration
+            )
+            request.cache = policy
+
+            // When
+            _ = await withCheckedContinuation { continuation in
+                request.fetch { _ in
+                    continuation.resume(returning: ())
+                }
+            }
+
+            // Then
+            #expect(configuration.requestCachePolicy == policy)
+            #expect(configuration.urlCache == nil)
+        }
+    }
 }
