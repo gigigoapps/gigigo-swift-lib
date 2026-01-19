@@ -240,7 +240,8 @@ struct SwiftNetworkIntegrationTests {
             baseUrl: "https://example.com/api",
             endpoint: "/v1/items",
             urlParams: ["status": "basic"],
-            bodyParams: ["name": "Taylor"]
+            bodyParams: ["name": "Taylor"],
+            standard: .basic
         )
 
         // When
