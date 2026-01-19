@@ -4,7 +4,8 @@ import Foundation
 final class MockURLProtocol: URLProtocol {
     private struct RouteHandler {
         let method: String?
-        let path: String
+        let path: String?
+        let matcher: ((URLRequest) -> Bool)?
         let handler: (URLRequest) throws -> (HTTPURLResponse, Data?)
     }
 
@@ -39,14 +40,18 @@ final class MockURLProtocol: URLProtocol {
     override func stopLoading() {}
 
     private static func handler(for request: URLRequest) -> ((URLRequest) throws -> (HTTPURLResponse, Data?))? {
-        guard let url = request.url else {
-            return nil
-        }
-
         let method = request.httpMethod ?? HTTPMethod.get.rawValue
 
         return handlerQueue.sync {
             handlers.last(where: { route in
+                if let matcher = route.matcher {
+                    return matcher(request)
+                }
+
+                guard let url = request.url else {
+                    return false
+                }
+
                 let methodMatches = route.method.map { $0.caseInsensitiveCompare(method) == .orderedSame } ?? true
                 return methodMatches && route.path == url.path
             })?.handler
@@ -59,7 +64,16 @@ final class MockURLProtocol: URLProtocol {
         handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data?)
     ) {
         handlerQueue.sync {
-            handlers.append(RouteHandler(method: method, path: path, handler: handler))
+            handlers.append(RouteHandler(method: method, path: path, matcher: nil, handler: handler))
+        }
+    }
+
+    private static func registerHandler(
+        matcher: @escaping (URLRequest) -> Bool,
+        handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data?)
+    ) {
+        handlerQueue.sync {
+            handlers.append(RouteHandler(method: nil, path: nil, matcher: matcher, handler: handler))
         }
     }
 }
@@ -150,6 +164,61 @@ extension MockURLProtocol {
                 return (response, data)
             }
         }
+    }
+
+    static func respond(
+        matcher: @escaping (URLRequest) -> Bool,
+        fixtureForRequest: @escaping (URLRequest) throws -> String,
+        statusCode: Int = 200,
+        headers: [String: String]? = ["Content-Type": "application/json"],
+        _ capture: ((URLRequest) -> Void)? = nil
+    ) {
+        registerHandler(matcher: matcher) { request in
+            _ = prepareCapturedRequest(request, capture)
+
+            guard let url = request.url else {
+                throw FixtureRouteError.invalidRequest
+            }
+
+            let fixtureName = try fixtureForRequest(request)
+            let data = try FixtureLoader.data(named: fixtureName)
+            let response = HTTPURLResponse.fake(url: url, statusCode: statusCode, headers: headers)
+            return (response, data)
+        }
+    }
+
+    static func respond(
+        method: String? = nil,
+        path: String,
+        queryKey: String,
+        fixtureByQueryValue: [String: String],
+        defaultFixture: String,
+        statusCode: Int = 200,
+        headers: [String: String]? = ["Content-Type": "application/json"],
+        _ capture: ((URLRequest) -> Void)? = nil
+    ) {
+        respond(
+            matcher: { request in
+                guard let url = request.url else {
+                    return false
+                }
+                let methodMatches = method.map {
+                    $0.caseInsensitiveCompare(request.httpMethod ?? HTTPMethod.get.rawValue) == .orderedSame
+                } ?? true
+                return methodMatches && url.path == path
+            },
+            fixtureForRequest: { request in
+                guard let url = request.url,
+                      let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+                    return defaultFixture
+                }
+                let queryValue = components.queryItems?.first(where: { $0.name == queryKey })?.value
+                return queryValue.flatMap { fixtureByQueryValue[$0] } ?? defaultFixture
+            },
+            statusCode: statusCode,
+            headers: headers,
+            capture
+        )
     }
 }
 

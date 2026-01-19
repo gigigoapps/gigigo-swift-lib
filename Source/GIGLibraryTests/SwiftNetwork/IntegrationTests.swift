@@ -180,4 +180,117 @@ struct SwiftNetworkIntegrationTests {
         #expect(response.statusCode == 200)
         #expect(response.data == nil)
     }
+
+    @Test("Given dynamic fixtures by path and query, when GET requests use base URL, endpoint, and params, then it returns the expected fixture")
+    func fetchUsesFixtureBasedOnPathAndQuery() async throws {
+        // Given
+        MockURLProtocol.respond(
+            method: HTTPMethod.get.rawValue,
+            path: "/api/v1/items",
+            queryKey: "type",
+            fixtureByQueryValue: ["ok": "ok_status"],
+            defaultFixture: "success"
+        )
+
+        let okRequest = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com/api",
+            endpoint: "/v1/items",
+            urlParams: ["type": "ok"]
+        )
+        let successRequest = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com/api",
+            endpoint: "/v1/items",
+            urlParams: ["type": "full"]
+        )
+
+        // When
+        let okResponse = await withCheckedContinuation { continuation in
+            okRequest.fetch { response in
+                continuation.resume(returning: response)
+            }
+        }
+        let successResponse = await withCheckedContinuation { continuation in
+            successRequest.fetch { response in
+                continuation.resume(returning: response)
+            }
+        }
+
+        // Then
+        #expect(okResponse.status == .success)
+        #expect(okResponse.data?.toDictionary()?["message"] as? String == "Done")
+        #expect(successResponse.status == .success)
+        #expect(successResponse.data?.toDictionary()?["id"] as? Int == 101)
+    }
+
+    @Test("Given dynamic fixtures, when POST uses base URL, endpoint, and params, then it returns the matching fixture")
+    func fetchUsesFixtureBasedOnPostUrlParams() async throws {
+        // Given
+        MockURLProtocol.respond(
+            method: HTTPMethod.post.rawValue,
+            path: "/api/v1/items",
+            queryKey: "status",
+            fixtureByQueryValue: ["basic": "basic_success"],
+            defaultFixture: "success"
+        )
+
+        let request = Request.testRequest(
+            method: HTTPMethod.post.rawValue,
+            baseUrl: "https://example.com/api",
+            endpoint: "/v1/items",
+            urlParams: ["status": "basic"],
+            bodyParams: ["name": "Taylor"]
+        )
+
+        // When
+        let response = await withCheckedContinuation { continuation in
+            request.fetch { response in
+                continuation.resume(returning: response)
+            }
+        }
+
+        // Then
+        #expect(response.status == .success)
+        #expect(response.data?.toDictionary()?["message"] as? String == "Hello")
+        #expect(response.data?.toDictionary()?["count"] as? Int == 2)
+    }
+
+    @Test("Given dynamic fixtures, when upload uses base URL, endpoint, and params, then it returns the matching fixture")
+    func uploadUsesFixtureBasedOnPathAndQuery() async throws {
+        // Given
+        MockURLProtocol.respond(
+            method: HTTPMethod.post.rawValue,
+            path: "/api/v1/upload",
+            queryKey: "upload",
+            fixtureByQueryValue: ["ok": "success"],
+            defaultFixture: "api_error"
+        )
+
+        let request = Request.testRequest(
+            method: HTTPMethod.post.rawValue,
+            baseUrl: "https://example.com/api",
+            endpoint: "/v1/upload",
+            urlParams: ["upload": "ok"]
+        )
+
+        let fileData = FileUploadData(
+            data: Data("upload".utf8),
+            mimeType: "text/plain",
+            filename: "upload.txt",
+            name: "file"
+        )
+
+        // When
+        let response = await withCheckedContinuation { continuation in
+            request.upload(files: [fileData], params: ["note": "ok"]) { response in
+                continuation.resume(returning: response)
+            }
+        }
+
+        // Then
+        #expect(response.status == .success)
+        #expect(response.data?.toDictionary()?["id"] as? Int == 101)
+        #expect(response.data?.toDictionary()?["name"] as? String == "Sample")
+    }
 }
