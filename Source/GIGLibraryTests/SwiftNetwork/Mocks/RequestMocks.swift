@@ -299,3 +299,8 @@ extension Request {
         )
     }
 }
+
+func makeImageResponse(body: Data?, url: URL) -> Response {
+    let response = HTTPURLResponse.fake(url: url, statusCode: 200, headers: nil)
+    return Response(data: body, response: response, error: nil)
+}
