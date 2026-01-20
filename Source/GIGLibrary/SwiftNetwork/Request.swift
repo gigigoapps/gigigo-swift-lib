@@ -52,6 +52,7 @@ open class Request: Selfie {
     open var bodyParamsArray: [[String: Any]]?
 	open var verbose = false
     open var logInfo: RequestLogInfo?
+    open var networkLogManager: NetworkLogManaging
     open var standardType: StandardType = .gigigo
     open var timeout: TimeInterval = 15.0
     open var cache: NSURLRequest.CachePolicy = NSURLRequest.CachePolicy.useProtocolCachePolicy
@@ -63,7 +64,7 @@ open class Request: Selfie {
     private let session: URLSession?
     
     // TODO , para versiones futuras borrar este metodo
-    public convenience init(method: String, baseUrl: String, endpoint: String, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, reachability: ReachabilityInput = ReachabilityWrapper.shared) {
+    public convenience init(method: String, baseUrl: String, endpoint: String, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, networkLogManager: NetworkLogManaging = DefaultNetworkLogManager(), reachability: ReachabilityInput = ReachabilityWrapper.shared) {
         self.init(
             method: method,
             baseUrl: baseUrl,
@@ -74,13 +75,14 @@ open class Request: Selfie {
             timeout: timeout,
             verbose: verbose,
             standard: .gigigo,
+            networkLogManager: networkLogManager,
             sessionConfiguration: sessionConfiguration,
             session: session,
             reachability: reachability
         )
     }
     
-    public convenience init(method: String, baseUrl: String, endpoint: String, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, reachability: ReachabilityInput = ReachabilityWrapper.shared) {
+    public convenience init(method: String, baseUrl: String, endpoint: String, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, networkLogManager: NetworkLogManaging = DefaultNetworkLogManager(), reachability: ReachabilityInput = ReachabilityWrapper.shared) {
         self.init(method: method,
             baseUrl: baseUrl,
             endpoint: endpoint,
@@ -91,12 +93,13 @@ open class Request: Selfie {
             verbose: verbose,
             standard: standard,
             logInfo: nil,
+            networkLogManager: networkLogManager,
             sessionConfiguration: sessionConfiguration,
             session: session,
             reachability: reachability)
     }
 
-    public init(method: String, baseUrl: String, endpoint: String, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, logInfo: RequestLogInfo? = nil, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, reachability: ReachabilityInput = ReachabilityWrapper.shared) {
+    public init(method: String, baseUrl: String, endpoint: String, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, logInfo: RequestLogInfo? = nil, networkLogManager: NetworkLogManaging = DefaultNetworkLogManager(), sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, reachability: ReachabilityInput = ReachabilityWrapper.shared) {
         self.method = method
         self.baseURL = baseUrl
         self.endpoint = endpoint
@@ -107,12 +110,13 @@ open class Request: Selfie {
         self.verbose = verbose
         self.standardType = standard
         self.logInfo = logInfo
+        self.networkLogManager = networkLogManager
         self.sessionConfiguration = sessionConfiguration
         self.session = session
         self.reachability = reachability
     }
 
-    public convenience init(method: HTTPMethod, completeURL: URL, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, reachability: ReachabilityInput = ReachabilityWrapper.shared) {
+    public convenience init(method: HTTPMethod, completeURL: URL, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, networkLogManager: NetworkLogManaging = DefaultNetworkLogManager(), reachability: ReachabilityInput = ReachabilityWrapper.shared) {
         self.init(method: method,
             completeURL: completeURL, 
             headers: headers, 
@@ -122,12 +126,13 @@ open class Request: Selfie {
             verbose: verbose,
             standard: standard,
             logInfo: nil,
+            networkLogManager: networkLogManager,
             sessionConfiguration: sessionConfiguration,
             session: session,
             reachability: reachability)
     }
 
-    public init(method: HTTPMethod, completeURL: URL, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, logInfo: RequestLogInfo? = nil, sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, reachability: ReachabilityInput = ReachabilityWrapper.shared) {
+    public init(method: HTTPMethod, completeURL: URL, headers: [String: String]? = nil, urlParams: [String: Any]? = nil, bodyParams: [String: Any]? = nil, timeout: TimeInterval? = nil, verbose: Bool = false, standard: StandardType = .gigigo, logInfo: RequestLogInfo? = nil, networkLogManager: NetworkLogManaging = DefaultNetworkLogManager(), sessionConfiguration: URLSessionConfiguration? = nil, session: URLSession? = nil, reachability: ReachabilityInput = ReachabilityWrapper.shared) {
         self.method = method.rawValue
         self.completeURL = completeURL
         self.baseURL = completeURL.absoluteString
@@ -139,6 +144,7 @@ open class Request: Selfie {
         self.verbose = verbose
         self.standardType = standard
         self.logInfo = logInfo
+        self.networkLogManager = networkLogManager
         self.sessionConfiguration = sessionConfiguration
         self.session = session
         self.reachability = reachability
@@ -163,7 +169,7 @@ open class Request: Selfie {
                 session.finishTasksAndInvalidate()
             }
             
-            let response = Response(data: data, response: urlResponse, error: error, standardType: self.standardType)
+            let response = Response(data: data, response: urlResponse, error: error, standardType: self.standardType, networkLogManager: self.networkLogManager)
 			
 			if self.verbose {
 				response.logResponse(self.logInfo)
@@ -197,7 +203,7 @@ open class Request: Selfie {
                 return
             }
             
-            let response = Response(data: nil, response: response, error: error, standardType: StandardType.basic)
+            let response = Response(data: nil, response: response, error: error, standardType: StandardType.basic, networkLogManager: self.networkLogManager)
             
             do {
                 if FileManager.default.fileExists(atPath: withDownloadUrlFile.path) {
@@ -253,7 +259,7 @@ open class Request: Selfie {
         
         self.task = session.uploadTask(with: request, from: bodyData, completionHandler: { data, urlResponse, error in
             
-            let response = Response(data: data, response: urlResponse, error: error, standardType: self.standardType)
+            let response = Response(data: data, response: urlResponse, error: error, standardType: self.standardType, networkLogManager: self.networkLogManager)
 
             if self.verbose {
                 response.logResponse(self.logInfo)
@@ -300,19 +306,6 @@ open class Request: Selfie {
         return URLSession(configuration: configuration, delegate: self as? URLSessionDelegate, delegateQueue: nil)
     }
 	
-    fileprivate func printLog(_ message: String, logInfo: RequestLogInfo) {
-        switch logInfo.logLevel {
-        case .debug:
-            gigLogDebug(message, module: logInfo.module, filename: logInfo.filename, line: logInfo.line, funcname: logInfo.funcname, handler: logInfo.handler)
-        case .error:
-            gigLogError(NSError(code: 0, message: message), module: logInfo.module, filename: logInfo.filename, line: logInfo.line, funcname: logInfo.funcname, handler: logInfo.handler)
-        case .info:
-            gigLogInfo(message, module: logInfo.module, filename: logInfo.filename, line: logInfo.line, funcname: logInfo.funcname, handler: logInfo.handler)
-        default:
-            break
-        }
-    }
-    
 	fileprivate func buildRequest() -> URLRequest? {
         var finalURL: URL?
         
@@ -326,11 +319,7 @@ open class Request: Selfie {
         guard let url = finalURL else { 
             if self.verbose {
                 let error = "not a valid URL"
-                if let logInfo = self.logInfo {
-                    printLog(error, logInfo: logInfo)
-                } else {
-                    print(error)
-                }
+                self.networkLogManager.log(error, info: self.logInfo)
             }
             return nil
         }
@@ -386,44 +375,8 @@ open class Request: Selfie {
             LogManager.shared.appName = "GIGLibrary"
         }
         
-		let url = self.request?.url?.absoluteString ?? "no url set"
-		let method = self.request?.httpMethod ?? "no method set"
-		
-		var log = "\n******** REQUEST ********\n"
-		log += " - URL:\t\t\(url)\n"
-		log += " - METHOD:\t\(method)\n"
-		let body = self.logBody()
-		let headers = self.logHeaders()
-		log += body + headers + "*************************\n\n"
-        
-        if let logInfo = self.logInfo {
-            printLog(log, logInfo: logInfo)
-        } else {
-            print(log)
-        }
-	}
-	
-	fileprivate func logBody() -> String {
-		guard
-			let body = self.request?.httpBody,
-			let json = try? JSON.dataToJson(body)
-			else { return "" }
-		
-		return " - BODY:\n\(json)\n"
-	}
-	
-	fileprivate func logHeaders() -> String {
-		guard let headers = self.request?.allHTTPHeaderFields, !headers.isEmpty else { return "" }
-		
-		var logString = " - HEADERS: {"
-		
-		for key in headers.keys {
-			if let value = headers[key] {
-				logString += "\n\t\t\(key): \(value)"
-			}
-		}
-		
-		return logString + "\n}\n"
+        let log = RequestLogFormatter.buildRequestLog(request: self.request)
+        self.networkLogManager.log(log, info: self.logInfo)
 	}
     
     fileprivate func generateBoundary() -> String? {
