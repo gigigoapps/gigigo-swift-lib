@@ -451,4 +451,157 @@ struct RequestTests {
             #expect(configuration.urlCache == nil)
         }
     }
+
+    @Test("Given verbose request, when fetch is called, then request log includes URL, METHOD, and separator")
+    func requestLogIncludesUrlMethodAndSeparator() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+
+        MockURLProtocol.respond(path: "/log") { _ in }
+
+        let request = Request.testRequest(
+            method: HTTPMethod.post.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/log",
+            headers: nil,
+            urlParams: nil,
+            bodyParams: nil,
+            verbose: true,
+            networkLogManager: spy
+        )
+
+        // When
+        _ = await withCheckedContinuation { continuation in
+            request.fetch { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        // Then
+        let message = try #require(spy.messages.first)
+
+        #expect(message.contains("******** REQUEST ********"))
+        #expect(message.contains(" - URL:\t\thttps://example.com/log"))
+        #expect(message.contains(" - METHOD:\tPOST"))
+    }
+
+    @Test("Given verbose request with body params, when fetch is called, then request log includes JSON body")
+    func requestLogIncludesBodyParamsJson() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+
+        MockURLProtocol.respond(path: "/body") { _ in }
+
+        let request = Request.testRequest(
+            method: HTTPMethod.post.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/body",
+            headers: nil,
+            urlParams: nil,
+            bodyParams: ["name": "Taylor", "count": 3],
+            verbose: true,
+            networkLogManager: spy
+        )
+
+        // When
+        _ = await withCheckedContinuation { continuation in
+            request.fetch { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        // Then
+        let message = try #require(spy.messages.first)
+
+        #expect(message.contains(" - BODY:\n"))
+        #expect(message.contains("\"name\" : \"Taylor\""))
+        #expect(message.contains("\"count\" : 3"))
+    }
+
+    @Test("Given verbose requests with and without headers, when fetch is called, then log includes headers only when present")
+    func requestLogIncludesHeadersOnlyWhenPresent() async throws {
+        // Given
+        let spyWithHeaders = NetworkLogManagerSpy()
+        let spyWithoutHeaders = NetworkLogManagerSpy()
+
+        MockURLProtocol.respond(path: "/headers") { _ in }
+        MockURLProtocol.respond(path: "/no-headers") { _ in }
+
+        let requestWithHeaders = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/headers",
+            headers: ["Authorization": "Bearer 123"],
+            urlParams: nil,
+            bodyParams: nil,
+            verbose: true,
+            networkLogManager: spyWithHeaders
+        )
+
+        let requestWithoutHeaders = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/no-headers",
+            headers: nil,
+            urlParams: nil,
+            bodyParams: nil,
+            verbose: true,
+            networkLogManager: spyWithoutHeaders
+        )
+
+        // When
+        _ = await withCheckedContinuation { continuation in
+            requestWithHeaders.fetch { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        _ = await withCheckedContinuation { continuation in
+            requestWithoutHeaders.fetch { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        // Then
+        let messageWithHeaders = try #require(spyWithHeaders.messages.first)
+        let messageWithoutHeaders = try #require(spyWithoutHeaders.messages.first)
+
+        #expect(messageWithHeaders.contains(" - HEADERS:"))
+        #expect(messageWithHeaders.contains("Authorization: Bearer 123"))
+        #expect(messageWithoutHeaders.contains(" - HEADERS:") == false)
+    }
+
+    @Test("Given verbose request with body params array, when fetch is called, then request log includes JSON array body")
+    func requestLogIncludesBodyParamsArray() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+
+        MockURLProtocol.respond(path: "/array") { _ in }
+
+        let request = Request.testRequest(
+            method: HTTPMethod.post.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/array",
+            headers: nil,
+            urlParams: nil,
+            bodyParams: nil,
+            verbose: true,
+            networkLogManager: spy
+        )
+        request.bodyParamsArray = [["id": 1], ["id": 2]]
+
+        // When
+        _ = await withCheckedContinuation { continuation in
+            request.fetch { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        // Then
+        let message = try #require(spy.messages.first)
+
+        #expect(message.contains(" - BODY:\n["))
+        #expect(message.contains("\"id\" : 1"))
+        #expect(message.contains("\"id\" : 2"))
+    }
 }
