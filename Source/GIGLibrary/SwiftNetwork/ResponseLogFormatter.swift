@@ -43,7 +43,7 @@ public enum ResponseLogFormatter {
     }
 
     private static func logData(_ body: Data?) -> String {
-        guard let body = body else {
+        guard let body = body, !body.isEmpty else {
             return ""
         }
 
