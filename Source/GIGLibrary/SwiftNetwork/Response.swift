@@ -34,6 +34,7 @@ open class Response: Selfie {
 	open var body: Data?
 	open var data: JSON?
 	open var error: NSError?
+    open var networkLogManager: NetworkLogManaging
     var standardType: StandardType = .gigigo
 	
 	
@@ -42,11 +43,13 @@ open class Response: Selfie {
 	init() {
 		self.status = .unknownError
 		self.statusCode = 0
+        self.networkLogManager = DefaultNetworkLogManager()
 	}
 	
-    convenience init(data: Data?, response: URLResponse?, error: Error?, standardType: StandardType = .gigigo) {
+    convenience init(data: Data?, response: URLResponse?, error: Error?, standardType: StandardType = .gigigo, networkLogManager: NetworkLogManaging = DefaultNetworkLogManager()) {
 		self.init()
 		
+        self.networkLogManager = networkLogManager
         self.standardType = standardType
 		self.error = error as NSError?
 		if let response = response as? HTTPURLResponse {
@@ -150,67 +153,8 @@ open class Response: Selfie {
     }
 	
     func logResponse(_ logInfo: RequestLogInfo?) {
-		var log = "\n******** RESPONSE ********\n"
-		log += " - URL:\t" + self.logURL() + "\n"
-		log += " - CODE:\t" + "\(self.statusCode)\n"
-		let headers = self.logHeaders()
-		let data = self.logData()
-		log += headers + data + "*************************\n\n"
-        
-        if let logInfo = logInfo {
-            printLog(log, logInfo: logInfo)
-        } else {
-            print(log)
-        }
-	}
-    
-    fileprivate func printLog(_ message: String, logInfo: RequestLogInfo) {
-        switch logInfo.logLevel {
-        case .debug:
-            gigLogDebug(message, module: logInfo.module, filename: logInfo.filename, line: logInfo.line, funcname: logInfo.funcname, handler: logInfo.handler)
-        case .error:
-            gigLogError(NSError(code: 0, message: message), module: logInfo.module, filename: logInfo.filename, line: logInfo.line, funcname: logInfo.funcname, handler: logInfo.handler)
-        case .info:
-            gigLogInfo(message, module: logInfo.module, filename: logInfo.filename, line: logInfo.line, funcname: logInfo.funcname, handler: logInfo.handler)
-        default:
-            break
-        }
-    }
-	
-	private func logURL() -> String {
-		guard let url = self.url?.absoluteString else {
-			return "NO URL"
-		}
-		
-		return url
-	}
-	
-	private func logHeaders() -> String {
-		guard let headers = self.headers else { return "" }
-		
-		var log = " - HEADERS: {"
-		
-		for key in headers.keys {
-			if let value = headers[key] {
-				log += "\n\t\t\(key): \(value)"
-			}
-		}
-		
-		return log + "\n}\n"
-	}
-	
-	private func logData() -> String {
-		guard let body = self.body else {
-			return ""
-		}
-		
-		if let json = try? JSON.dataToJson(body) {
-			return " - JSON:\n\(json)\n"
-		} else if let string = String(data: body, encoding: .utf8) {
-			return" - DATA:\n\(string)\n"
-        } else {
-            return ""
-        }
+        let log = ResponseLogFormatter.buildResponseLog(url: self.url, statusCode: self.statusCode, headers: self.headers, body: self.body)
+        self.networkLogManager.log(log, info: logInfo)
 	}
 }
 
