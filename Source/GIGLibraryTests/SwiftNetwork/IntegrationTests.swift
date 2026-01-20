@@ -4,6 +4,14 @@ import Testing
 
 @Suite(.serialized)
 struct SwiftNetworkIntegrationTests {
+    private func fetchResponse(for request: Request) async -> Response {
+        await withCheckedContinuation { continuation in
+            request.fetch { response in
+                continuation.resume(returning: response)
+            }
+        }
+    }
+
     @Test("Given a request and the success fixture, when fetch is called, then response matches fixture success")
     func fetchReturnsSuccessFixtureResponse() async throws {
         // Given
@@ -293,5 +301,169 @@ struct SwiftNetworkIntegrationTests {
         #expect(response.status == .success)
         #expect(response.data?.toDictionary()?["id"] as? Int == 101)
         #expect(response.data?.toDictionary()?["name"] as? String == "Sample")
+    }
+
+    @Test("Given a verbose GET request with headers and params, when fetch is called, then request and response logs include URL, method, and headers")
+    func fetchLogsRequestAndResponseWithHeadersAndParams() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+        MockURLProtocol.respond(
+            path: "/log",
+            statusCode: 200,
+            headers: ["X-Response": "yes"],
+            data: Data()
+        )
+        let request = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/log",
+            headers: ["Authorization": "Bearer 123"],
+            urlParams: ["search": "swift", "page": 1],
+            bodyParams: nil,
+            verbose: true,
+            networkLogManager: spy
+        )
+
+        // When
+        _ = await fetchResponse(for: request)
+
+        // Then
+        let requestLog = try #require(spy.messages.first)
+        let responseLog = try #require(spy.messages.last)
+
+        #expect(requestLog.contains("******** REQUEST ********"))
+        #expect(requestLog.contains(" - URL:\t\thttps://example.com/log?"))
+        #expect(requestLog.contains("search=swift"))
+        #expect(requestLog.contains("page=1"))
+        #expect(requestLog.contains(" - METHOD:\tGET"))
+        #expect(requestLog.contains(" - HEADERS:"))
+        #expect(requestLog.contains("Authorization: Bearer 123"))
+
+        #expect(responseLog.contains("******** RESPONSE ********"))
+        #expect(responseLog.contains(" - URL:\thttps://example.com/log?"))
+        #expect(responseLog.contains("search=swift"))
+        #expect(responseLog.contains("page=1"))
+        #expect(responseLog.contains(" - CODE:\t200"))
+        #expect(responseLog.contains(" - HEADERS:"))
+        #expect(responseLog.contains("X-Response: yes"))
+    }
+
+    @Test("Given a verbose POST request with JSON body, when fetch is called, then request log includes body JSON")
+    func fetchLogsRequestBodyJson() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+        MockURLProtocol.respond(path: "/body", statusCode: 200, data: Data())
+        let request = Request.testRequest(
+            method: HTTPMethod.post.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/body",
+            bodyParams: ["name": "Taylor", "count": 3],
+            verbose: true,
+            networkLogManager: spy
+        )
+
+        // When
+        _ = await fetchResponse(for: request)
+
+        // Then
+        let requestLog = try #require(spy.messages.first)
+        #expect(requestLog.contains(" - BODY:\n"))
+        #expect(requestLog.contains("\"name\" : \"Taylor\""))
+        #expect(requestLog.contains("\"count\" : 3"))
+    }
+
+    @Test("Given a JSON response, when fetch is called, then response log includes JSON section")
+    func fetchLogsResponseJson() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+        MockURLProtocol.respond(path: "/json", fixture: "success", statusCode: 200)
+        let request = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/json",
+            verbose: true,
+            networkLogManager: spy
+        )
+
+        // When
+        _ = await fetchResponse(for: request)
+
+        // Then
+        let responseLog = try #require(spy.messages.last)
+        #expect(responseLog.contains(" - JSON:\n"))
+        #expect(responseLog.contains("\"status\" : true"))
+        #expect(responseLog.contains("\"name\" : \"Sample\""))
+    }
+
+    @Test("Given a plain text response, when fetch is called, then response log includes data section without JSON")
+    func fetchLogsResponsePlainText() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+        let data = try #require("plain text".data(using: .utf8))
+        MockURLProtocol.respond(
+            path: "/text",
+            statusCode: 200,
+            headers: ["Content-Type": "text/plain"],
+            data: data
+        )
+        let request = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/text",
+            verbose: true,
+            networkLogManager: spy
+        )
+
+        // When
+        _ = await fetchResponse(for: request)
+
+        // Then
+        let responseLog = try #require(spy.messages.last)
+        #expect(responseLog.contains(" - DATA:\nplain text"))
+        #expect(responseLog.contains(" - JSON:") == false)
+    }
+
+    @Test("Given a 204 response without headers or body, when fetch is called, then response log omits headers and body sections")
+    func fetchLogsResponseWithoutHeadersOrBody() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+        MockURLProtocol.respond(path: "/no-body", statusCode: 204, headers: nil, data: nil)
+        let request = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/no-body",
+            verbose: true,
+            networkLogManager: spy
+        )
+
+        // When
+        _ = await fetchResponse(for: request)
+
+        // Then
+        let responseLog = try #require(spy.messages.last)
+        #expect(responseLog.contains(" - HEADERS:") == false)
+        #expect(responseLog.contains(" - JSON:") == false)
+        #expect(responseLog.contains(" - DATA:") == false)
+    }
+
+    @Test("Given offline reachability, when fetch is called, then it returns no internet and no logs are emitted")
+    func fetchOfflineDoesNotLogAndReturnsNoInternet() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+        let request = Request.testRequest(
+            method: HTTPMethod.get.rawValue,
+            baseUrl: "https://example.com",
+            endpoint: "/offline",
+            verbose: true,
+            reachable: false,
+            networkLogManager: spy
+        )
+
+        // When
+        let response = await fetchResponse(for: request)
+
+        // Then
+        #expect(response.status == .noInternet)
+        #expect(spy.messages.isEmpty)
     }
 }
