@@ -281,7 +281,8 @@ extension Request {
         verbose: Bool = false,
         standard: StandardType = .gigigo,
         sessionConfiguration: URLSessionConfiguration? = nil,
-        reachable: Bool = true
+        reachable: Bool = true,
+        networkLogManager: NetworkLogManaging = DefaultNetworkLogManager()
     ) -> Request {
         let configuration = sessionConfiguration ?? .testConfiguration()
         return Request(
@@ -294,6 +295,7 @@ extension Request {
             timeout: timeout,
             verbose: verbose,
             standard: standard,
+            networkLogManager: networkLogManager,
             sessionConfiguration: configuration,
             reachability: MockReachabilityProvider(reachable: reachable)
         )

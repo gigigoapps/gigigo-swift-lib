@@ -235,4 +235,76 @@ struct ResponseTests {
         }
     }
 
+    @Test("Given a response, when logging, then it includes URL and status code")
+    func responseLogIncludesUrlAndCode() throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+        let url = try #require(URL(string: "https://example.com/resource"))
+        let httpResponse = HTTPURLResponse.fake(url: url, statusCode: 201, headers: nil)
+        let response = Response(data: nil, response: httpResponse, error: nil, networkLogManager: spy)
+
+        // When
+        response.logResponse()
+
+        // Then
+        let message = try #require(spy.lastMessage)
+        #expect(message.contains("******** RESPONSE ********"))
+        #expect(message.contains(" - URL:\thttps://example.com/resource"))
+        #expect(message.contains(" - CODE:\t201"))
+    }
+
+    @Test("Given a JSON response body, when logging, then it includes the JSON section")
+    func responseLogIncludesJsonBody() throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+        let url = try #require(URL(string: "https://example.com/json"))
+        let body: [String: Any] = ["name": "Taylor", "count": 2]
+        let data = try JSONSerialization.data(withJSONObject: body, options: [])
+        let httpResponse = HTTPURLResponse.fake(url: url, statusCode: 200, headers: ["Content-Type": "application/json"])
+        let response = Response(data: data, response: httpResponse, error: nil, networkLogManager: spy)
+
+        // When
+        response.logResponse()
+
+        // Then
+        let message = try #require(spy.lastMessage)
+        #expect(message.contains(" - JSON:\n"))
+        #expect(message.contains("\"name\" : \"Taylor\""))
+        #expect(message.contains("\"count\" : 2"))
+    }
+
+    @Test("Given a non-JSON string body, when logging, then it includes the data section")
+    func responseLogIncludesStringBodyAsData() throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+        let url = try #require(URL(string: "https://example.com/text"))
+        let data = try #require("plain text".data(using: .utf8))
+        let httpResponse = HTTPURLResponse.fake(url: url, statusCode: 200, headers: nil)
+        let response = Response(data: data, response: httpResponse, error: nil, networkLogManager: spy)
+
+        // When
+        response.logResponse()
+
+        // Then
+        let message = try #require(spy.lastMessage)
+        #expect(message.contains(" - DATA:\nplain text"))
+    }
+
+    @Test("Given a response without headers or body, when logging, then it omits those sections")
+    func responseLogOmitsHeadersAndBodyWhenEmpty() throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+        let url = try #require(URL(string: "https://example.com/empty"))
+        let httpResponse = HTTPURLResponse.fake(url: url, statusCode: 204, headers: nil)
+        let response = Response(data: nil, response: httpResponse, error: nil, networkLogManager: spy)
+
+        // When
+        response.logResponse()
+
+        // Then
+        let message = try #require(spy.lastMessage)
+        #expect(message.contains(" - HEADERS:") == false)
+        #expect(message.contains(" - JSON:") == false)
+        #expect(message.contains(" - DATA:") == false)
+    }
 }
