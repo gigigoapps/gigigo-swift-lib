@@ -18,6 +18,23 @@ struct ResponseTests {
         return Response(data: data, response: response, error: nil, standardType: standardType)
     }
 
+    private func assertThrowsResponseError(_ expected: ResponseError, _ block: () throws -> Void) {
+        var didThrow = false
+        var didThrowUnexpected = false
+        do {
+            try block()
+        } catch let error as ResponseError {
+            didThrow = true
+            #expect(error == expected)
+        } catch {
+            didThrow = true
+            didThrowUnexpected = true
+        }
+
+        #expect(didThrow)
+        #expect(!didThrowUnexpected)
+    }
+
     @Test("Given JSON status true with data, when Response parses, then it is success and data points to the data node")
     func responseParsesSuccessWithDataNode() throws {
         // Given
@@ -182,11 +199,8 @@ struct ResponseTests {
         let response = Response(data: nil, response: nil, error: nil)
 
         // When/Then
-        do {
+        assertThrowsResponseError(.bodyNil) {
             _ = try response.json()
-            #expect(false)
-        } catch {
-            #expect(error as? ResponseError == .bodyNil)
         }
     }
 
@@ -197,11 +211,8 @@ struct ResponseTests {
         let response = makeImageResponse(body: nil, url: url)
 
         // When/Then
-        do {
+        assertThrowsResponseError(.bodyNil) {
             _ = try response.image()
-            #expect(false, "Expected bodyNil error.")
-        } catch let error as ResponseError {
-            #expect(error == .bodyNil)
         }
     }
 
@@ -212,11 +223,8 @@ struct ResponseTests {
         let response = makeImageResponse(body: Data([0x00, 0x01, 0x02]), url: url)
 
         // When/Then
-        do {
+        assertThrowsResponseError(.unexpectedDataType) {
             _ = try response.image()
-            #expect(false, "Expected unexpectedDataType error.")
-        } catch let error as ResponseError {
-            #expect(error == .unexpectedDataType)
         }
     }
 
@@ -227,11 +235,8 @@ struct ResponseTests {
         let response = makeImageResponse(body: Data([0x00, 0x01, 0x02]), url: url)
 
         // When/Then
-        do {
+        assertThrowsResponseError(.unexpectedDataType) {
             _ = try response.image()
-            #expect(false, "Expected unexpectedDataType error.")
-        } catch let error as ResponseError {
-            #expect(error == .unexpectedDataType)
         }
     }
 

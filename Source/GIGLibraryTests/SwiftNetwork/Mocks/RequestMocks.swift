@@ -3,7 +3,7 @@ import Foundation
 
 final class MockURLProtocol: URLProtocol {
     private struct RouteHandler {
-        let method: String?
+        let method: HTTPMethod?
         let path: String?
         let matcher: ((URLRequest) -> Bool)?
         let handler: (URLRequest) throws -> (HTTPURLResponse, Data?)
@@ -40,7 +40,8 @@ final class MockURLProtocol: URLProtocol {
     override func stopLoading() {}
 
     private static func handler(for request: URLRequest) -> ((URLRequest) throws -> (HTTPURLResponse, Data?))? {
-        let method = request.httpMethod ?? .get
+        let methodString = request.httpMethod ?? HTTPMethod.get.rawValue
+        let method = HTTPMethod(rawValue: methodString) ?? .get
 
         return handlerQueue.sync {
             handlers.last(where: { route in
@@ -52,14 +53,14 @@ final class MockURLProtocol: URLProtocol {
                     return false
                 }
 
-                let methodMatches = route.method.map { $0.caseInsensitiveCompare(method) == .orderedSame } ?? true
+                let methodMatches = route.method.map { $0 == method } ?? true
                 return methodMatches && route.path == url.path
             })?.handler
         }
     }
 
     private static func registerHandler(
-        method: String?,
+        method: HTTPMethod?,
         path: String,
         handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data?)
     ) {
@@ -121,7 +122,7 @@ extension MockURLProtocol {
         statusCode: Int = 200,
         headers: [String: String]? = nil,
         data: Data? = nil,
-        method: String? = nil,
+        method: HTTPMethod? = nil,
         _ capture: ((URLRequest) -> Void)? = nil
     ) {
         registerHandler(method: method, path: path) { request in
@@ -136,7 +137,7 @@ extension MockURLProtocol {
         fixture name: String,
         statusCode: Int = 200,
         headers: [String: String]? = ["Content-Type": "application/json"],
-        method: String? = nil,
+        method: HTTPMethod? = nil,
         _ capture: ((URLRequest) -> Void)? = nil
     ) {
         registerHandler(method: method, path: path) { request in
@@ -188,7 +189,7 @@ extension MockURLProtocol {
     }
 
     static func respond(
-        method: String? = nil,
+        method: HTTPMethod? = nil,
         path: String,
         queryKey: String,
         fixtureByQueryValue: [String: String],
@@ -202,9 +203,9 @@ extension MockURLProtocol {
                 guard let url = request.url else {
                     return false
                 }
-                let methodMatches = method.map {
-                    $0.caseInsensitiveCompare(request.httpMethod ?? .get) == .orderedSame
-                } ?? true
+                let methodString = request.httpMethod ?? HTTPMethod.get.rawValue
+                let requestMethod = HTTPMethod(rawValue: methodString) ?? .get
+                let methodMatches = method.map { $0 == requestMethod } ?? true
                 return methodMatches && url.path == path
             },
             fixtureForRequest: { request in
@@ -228,14 +229,14 @@ enum FixtureRouteError: Error {
 }
 
 struct FixtureRoute {
-    let method: String?
+    let method: HTTPMethod?
     let path: String
     let fixture: String
     let statusCode: Int
     let headers: [String: String]?
 
     init(
-        method: String? = nil,
+        method: HTTPMethod? = nil,
         path: String,
         fixture: String,
         statusCode: Int = 200,

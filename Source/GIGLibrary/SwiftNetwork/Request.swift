@@ -55,7 +55,7 @@ public class Request: Selfie {
     private var bodyParamsArray: [[String: Any]]?
     private var logInfo: RequestLogInfo?
     private var networkLogManager: NetworkLogManaging
-    private var cache: NSURLRequest.CachePolicy = NSURLRequest.CachePolicy.useProtocolCachePolicy
+    var cache: NSURLRequest.CachePolicy = NSURLRequest.CachePolicy.useProtocolCachePolicy
 	
 	private var request: URLRequest?
 	private weak var task: URLSessionTask?
