@@ -17,7 +17,6 @@ struct SwiftNetworkIntegrationTests {
         // Given
         MockURLProtocol.respond(path: "/success", fixture: "success", statusCode: 200)
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/success"
         )
@@ -42,7 +41,6 @@ struct SwiftNetworkIntegrationTests {
         // Given
         MockURLProtocol.respond(path: "/ok-status", fixture: "ok_status", statusCode: 200)
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/ok-status"
         )
@@ -66,7 +64,6 @@ struct SwiftNetworkIntegrationTests {
         // Given
         MockURLProtocol.respond(path: "/ko-status", fixture: "ko_status", statusCode: 400)
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/ko-status"
         )
@@ -92,7 +89,6 @@ struct SwiftNetworkIntegrationTests {
         // Given
         MockURLProtocol.respond(path: "/error", fixture: "api_error", statusCode: 400)
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/error"
         )
@@ -118,7 +114,6 @@ struct SwiftNetworkIntegrationTests {
         // Given
         MockURLProtocol.respond(path: "/basic", fixture: "basic_success", statusCode: 200)
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/basic",
             standard: .basic
@@ -148,7 +143,6 @@ struct SwiftNetworkIntegrationTests {
             data: nil
         )
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/no-content"
         )
@@ -171,7 +165,6 @@ struct SwiftNetworkIntegrationTests {
         // Given
         MockURLProtocol.respond(path: "/invalid-json", fixture: "invalid_json", statusCode: 200)
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/invalid-json"
         )
@@ -189,11 +182,36 @@ struct SwiftNetworkIntegrationTests {
         #expect(response.data == nil)
     }
 
+    @Test("Given a base URL including full path and query params, when fetch is called, then it merges existing and new params without appending the endpoint")
+    func fetchBuildsRequestWithBaseUrlIncludingQueryParams() async throws {
+        // Given
+        MockURLProtocol.respond(path: "/api/resource", fixture: "success", statusCode: 200)
+
+        let request = Request.testRequest(
+            baseUrl: "https://example.com/api/resource?existing=one&token=abc",
+            endpoint: "",
+            urlParams: ["foo": "bar", "page": 2]
+        )
+
+        // When
+        let response = await withCheckedContinuation { continuation in
+            request.fetch { response in
+                continuation.resume(returning: response)
+            }
+        }
+
+        // Then
+        #expect(response.status == .success)
+        #expect(response.statusCode == 200)
+        #expect(response.error == nil)
+        #expect(response.data?.toDictionary()?["id"] as? Int == 101)
+        #expect(response.data?.toDictionary()?["name"] as? String == "Sample")
+    }
+
     @Test("Given dynamic fixtures by path and query, when GET requests use base URL, endpoint, and params, then it returns the expected fixture")
     func fetchUsesFixtureBasedOnPathAndQuery() async throws {
         // Given
         MockURLProtocol.respond(
-            method: HTTPMethod.get.rawValue,
             path: "/api/v1/items",
             queryKey: "type",
             fixtureByQueryValue: ["ok": "ok_status"],
@@ -201,13 +219,11 @@ struct SwiftNetworkIntegrationTests {
         )
 
         let okRequest = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com/api",
             endpoint: "/v1/items",
             urlParams: ["type": "ok"]
         )
         let successRequest = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com/api",
             endpoint: "/v1/items",
             urlParams: ["type": "full"]
@@ -236,7 +252,7 @@ struct SwiftNetworkIntegrationTests {
     func fetchUsesFixtureBasedOnPostUrlParams() async throws {
         // Given
         MockURLProtocol.respond(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             path: "/api/v1/items",
             queryKey: "status",
             fixtureByQueryValue: ["basic": "basic_success"],
@@ -244,7 +260,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         let request = Request.testRequest(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             baseUrl: "https://example.com/api",
             endpoint: "/v1/items",
             urlParams: ["status": "basic"],
@@ -269,7 +285,7 @@ struct SwiftNetworkIntegrationTests {
     func uploadUsesFixtureBasedOnPathAndQuery() async throws {
         // Given
         MockURLProtocol.respond(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             path: "/api/v1/upload",
             queryKey: "upload",
             fixtureByQueryValue: ["ok": "success"],
@@ -277,7 +293,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         let request = Request.testRequest(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             baseUrl: "https://example.com/api",
             endpoint: "/v1/upload",
             urlParams: ["upload": "ok"]
@@ -314,12 +330,10 @@ struct SwiftNetworkIntegrationTests {
             data: Data()
         )
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/log",
             headers: ["Authorization": "Bearer 123"],
             urlParams: ["search": "swift", "page": 1],
-            bodyParams: nil,
             verbose: true,
             networkLogManager: spy
         )
@@ -354,7 +368,7 @@ struct SwiftNetworkIntegrationTests {
         let spy = NetworkLogManagerSpy()
         MockURLProtocol.respond(path: "/body", statusCode: 200, data: Data())
         let request = Request.testRequest(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             baseUrl: "https://example.com",
             endpoint: "/body",
             bodyParams: ["name": "Taylor", "count": 3],
@@ -378,7 +392,6 @@ struct SwiftNetworkIntegrationTests {
         let spy = NetworkLogManagerSpy()
         MockURLProtocol.respond(path: "/json", fixture: "success", statusCode: 200)
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/json",
             verbose: true,
@@ -407,7 +420,6 @@ struct SwiftNetworkIntegrationTests {
             data: data
         )
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/text",
             verbose: true,
@@ -429,7 +441,6 @@ struct SwiftNetworkIntegrationTests {
         let spy = NetworkLogManagerSpy()
         MockURLProtocol.respond(path: "/no-body", statusCode: 204, headers: nil, data: nil)
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/no-body",
             verbose: true,
@@ -451,7 +462,6 @@ struct SwiftNetworkIntegrationTests {
         // Given
         let spy = NetworkLogManagerSpy()
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/offline",
             verbose: true,

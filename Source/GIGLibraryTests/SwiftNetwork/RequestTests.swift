@@ -14,7 +14,7 @@ struct RequestTests {
         }
 
         let request = Request.testRequest(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             baseUrl: "https://example.com/api",
             endpoint: "/v1/test",
             headers: ["Accept": "application/json"],
@@ -59,15 +59,11 @@ struct RequestTests {
         }
 
         let request = Request.testRequest(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             baseUrl: "https://example.com",
             endpoint: "/items",
-            bodyParams: nil,
-            timeout: nil,
-            verbose: false,
-            standard: .gigigo
+            bodyParamsArray: [["id": 1], ["id": 2]]
         )
-        request.bodyParamsArray = [["id": 1], ["id": 2]]
 
         // When
         _ = await withCheckedContinuation { continuation in
@@ -98,11 +94,10 @@ struct RequestTests {
         }
 
         let request = Request.testRequest(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             baseUrl: "https://example.com",
             endpoint: "/custom-content-type",
             headers: ["Content-Type": "application/custom"],
-            urlParams: nil,
             bodyParams: ["status": "ok"]
         )
 
@@ -130,11 +125,9 @@ struct RequestTests {
         }
 
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/v1/empty",
             headers: [:],
-            urlParams: nil,
             bodyParams: [:]
         )
 
@@ -162,7 +155,6 @@ struct RequestTests {
         }
 
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/offline",
             reachable: false
@@ -191,7 +183,6 @@ struct RequestTests {
         }
 
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/offline-download",
             reachable: false
@@ -210,8 +201,8 @@ struct RequestTests {
         #expect(didReceiveRequest == false)
     }
 
-    @Test("Given a complete URL with query params, when fetch is called, then it merges existing and new params without appending the endpoint")
-    func fetchBuildsRequestWithCompleteURLAndUrlParams() async throws {
+    @Test("Given a base URL that already includes full path and query params, when fetch is called, then it merges existing and new params without appending the endpoint")
+    func fetchBuildsRequestWithBaseUrlIncludingQueryParams() async throws {
         // Given
         var capturedRequest: URLRequest?
 
@@ -219,17 +210,14 @@ struct RequestTests {
             capturedRequest = request
         }
 
-        let completeURL = try #require(URL(string: "https://example.com/api/resource?existing=one&token=abc"))
+        let baseUrl = "https://example.com/api/resource?existing=one&token=abc"
         let request = Request(
-            method: .get,
-            completeURL: completeURL,
-            headers: nil,
+            baseUrl: baseUrl,
+            endpoint: "",
             urlParams: ["foo": "bar", "page": 2],
-            bodyParams: nil,
             sessionConfiguration: .testConfiguration(),
             reachability: MockReachabilityProvider(reachable: true)
         )
-        request.endpoint = "/should-not-append"
 
         // When
         _ = await withCheckedContinuation { continuation in
@@ -264,12 +252,9 @@ struct RequestTests {
         }
 
         let request = Request.testRequest(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             baseUrl: "https://example.com",
-            endpoint: "/upload",
-            headers: nil,
-            urlParams: nil,
-            bodyParams: nil
+            endpoint: "/upload"
         )
 
         let fileData = FileUploadData(
@@ -318,12 +303,9 @@ struct RequestTests {
         }
 
         let request = Request.testRequest(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             baseUrl: "https://example.com",
             endpoint: "/upload-offline",
-            headers: nil,
-            urlParams: nil,
-            bodyParams: nil,
             reachable: false
         )
 
@@ -362,7 +344,6 @@ struct RequestTests {
         MockURLProtocol.respond(path: "/download", data: fileData)
 
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/download"
         )
@@ -396,7 +377,6 @@ struct RequestTests {
         MockURLProtocol.respond(path: "/download-overwrite", data: updatedData)
 
         let request = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/download-overwrite"
         )
@@ -432,7 +412,6 @@ struct RequestTests {
             MockURLProtocol.respond(path: "/cache-policy") { _ in }
 
             let request = Request.testRequest(
-                method: HTTPMethod.get.rawValue,
                 baseUrl: "https://example.com",
                 endpoint: "/cache-policy",
                 sessionConfiguration: configuration
@@ -460,12 +439,9 @@ struct RequestTests {
         MockURLProtocol.respond(path: "/log") { _ in }
 
         let request = Request.testRequest(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             baseUrl: "https://example.com",
             endpoint: "/log",
-            headers: nil,
-            urlParams: nil,
-            bodyParams: nil,
             verbose: true,
             networkLogManager: spy
         )
@@ -493,11 +469,9 @@ struct RequestTests {
         MockURLProtocol.respond(path: "/body") { _ in }
 
         let request = Request.testRequest(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             baseUrl: "https://example.com",
             endpoint: "/body",
-            headers: nil,
-            urlParams: nil,
             bodyParams: ["name": "Taylor", "count": 3],
             verbose: true,
             networkLogManager: spy
@@ -528,23 +502,16 @@ struct RequestTests {
         MockURLProtocol.respond(path: "/no-headers") { _ in }
 
         let requestWithHeaders = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/headers",
             headers: ["Authorization": "Bearer 123"],
-            urlParams: nil,
-            bodyParams: nil,
             verbose: true,
             networkLogManager: spyWithHeaders
         )
 
         let requestWithoutHeaders = Request.testRequest(
-            method: HTTPMethod.get.rawValue,
             baseUrl: "https://example.com",
             endpoint: "/no-headers",
-            headers: nil,
-            urlParams: nil,
-            bodyParams: nil,
             verbose: true,
             networkLogManager: spyWithoutHeaders
         )
@@ -579,16 +546,13 @@ struct RequestTests {
         MockURLProtocol.respond(path: "/array") { _ in }
 
         let request = Request.testRequest(
-            method: HTTPMethod.post.rawValue,
+            method: .post,
             baseUrl: "https://example.com",
             endpoint: "/array",
-            headers: nil,
-            urlParams: nil,
-            bodyParams: nil,
+            bodyParamsArray: [["id": 1], ["id": 2]],
             verbose: true,
             networkLogManager: spy
         )
-        request.bodyParamsArray = [["id": 1], ["id": 2]]
 
         // When
         _ = await withCheckedContinuation { continuation in

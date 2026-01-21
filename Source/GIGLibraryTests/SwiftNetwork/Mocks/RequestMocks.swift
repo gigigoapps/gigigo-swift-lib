@@ -40,7 +40,7 @@ final class MockURLProtocol: URLProtocol {
     override func stopLoading() {}
 
     private static func handler(for request: URLRequest) -> ((URLRequest) throws -> (HTTPURLResponse, Data?))? {
-        let method = request.httpMethod ?? HTTPMethod.get.rawValue
+        let method = request.httpMethod ?? .get
 
         return handlerQueue.sync {
             handlers.last(where: { route in
@@ -203,7 +203,7 @@ extension MockURLProtocol {
                     return false
                 }
                 let methodMatches = method.map {
-                    $0.caseInsensitiveCompare(request.httpMethod ?? HTTPMethod.get.rawValue) == .orderedSame
+                    $0.caseInsensitiveCompare(request.httpMethod ?? .get) == .orderedSame
                 } ?? true
                 return methodMatches && url.path == path
             },
@@ -271,12 +271,13 @@ extension URLSessionConfiguration {
 
 extension Request {
     static func testRequest(
-        method: String,
+        method: HTTPMethod = .get,
         baseUrl: String,
         endpoint: String,
         headers: [String: String]? = nil,
         urlParams: [String: Any]? = nil,
         bodyParams: [String: Any]? = nil,
+        bodyParamsArray: [[String: Any]]? = nil,
         timeout: TimeInterval? = nil,
         verbose: Bool = false,
         standard: StandardType = .gigigo,
@@ -292,6 +293,7 @@ extension Request {
             headers: headers,
             urlParams: urlParams,
             bodyParams: bodyParams,
+            bodyParamsArray: bodyParamsArray,
             timeout: timeout,
             verbose: verbose,
             standard: standard,
