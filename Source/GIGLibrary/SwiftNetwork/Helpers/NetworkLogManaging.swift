@@ -8,14 +8,14 @@
 
 import Foundation
 
-public protocol NetworkLogManaging {
+protocol NetworkLogManaging {
     func log(_ message: String, info: RequestLogInfo?)
 }
 
-public struct DefaultNetworkLogManager: NetworkLogManaging {
-    public init() {}
+struct DefaultNetworkLogManager: NetworkLogManaging {
+    init() {}
 
-    public func log(_ message: String, info: RequestLogInfo?) {
+    func log(_ message: String, info: RequestLogInfo?) {
         guard let info else {
             print(message)
             return

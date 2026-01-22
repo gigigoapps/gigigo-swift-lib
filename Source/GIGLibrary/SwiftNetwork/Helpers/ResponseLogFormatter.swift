@@ -8,7 +8,7 @@
 
 import Foundation
 
-public enum ResponseLogFormatter {
+enum ResponseLogFormatter {
     public static func buildResponseLog(url: URL?, statusCode: Int, headers: [AnyHashable: Any]?, body: Data?) -> String {
         var log = "\n******** RESPONSE ********\n"
         log += " - URL:\t" + logURL(url) + "\n"
@@ -20,6 +20,8 @@ public enum ResponseLogFormatter {
         return log
     }
 
+    // Private Helpers
+    
     private static func logURL(_ url: URL?) -> String {
         guard let url = url?.absoluteString else {
             return "NO URL"

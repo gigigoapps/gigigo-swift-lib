@@ -8,8 +8,9 @@
 
 import Foundation
 
-public enum RequestLogFormatter {
-    public static func buildRequestLog(request: URLRequest?) -> String {
+enum RequestLogFormatter {
+
+    static func buildRequestLog(request: URLRequest?) -> String {
         let url = request?.url?.absoluteString ?? "no url set"
         let method = request?.httpMethod ?? "no method set"
 
@@ -23,6 +24,7 @@ public enum RequestLogFormatter {
         return log
     }
 
+    // Private Helpers
     private static func logBody(request: URLRequest?) -> String {
         guard
             let body = request?.httpBody,

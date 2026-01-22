@@ -25,17 +25,18 @@ public enum ResponseStatus {
 	case untrustedCertificate
 }
 
-open class Response: Selfie {
+public class Response: Selfie {
 	
-	open var status: ResponseStatus
-	open var statusCode: Int
-	open var url: URL?
-	open var headers: [AnyHashable: Any]?
-	open var body: Data?
-	open var data: JSON?
-	open var error: NSError?
-    open var networkLogManager: NetworkLogManaging
-    var standardType: StandardType = .gigigo
+	public var status: ResponseStatus
+	public var statusCode: Int
+	public var url: URL?
+	public var headers: [AnyHashable: Any]?
+	public var body: Data?
+	public var data: JSON?
+	public var error: NSError?
+
+	private var networkLogManager: NetworkLogManaging
+    private var standardType: StandardType = .gigigo
 	
 	
 	// MARK: - Initializers
@@ -183,16 +184,6 @@ public extension Response {
         }
         return image
 	}
-	
-//    func gif() throws -> UIImage {
-//        guard let imageData = self.body else {
-//            throw ResponseError.bodyNil
-//        }
-//        guard isGifData(), let imageGif = UIImage.gif(data: imageData) else {
-//            throw ResponseError.unexpectedDataType
-//        }
-//        return imageGif
-//    }
     
     private func isGifData() -> Bool {
         guard let url = url else {
