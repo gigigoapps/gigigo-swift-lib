@@ -25,7 +25,7 @@ public extension NSManagedObjectContext {
 	}
 	
     func fetchList(_ entityName: String, predicateString: String) -> [NSManagedObject]? {
-        let fetch : NSFetchRequest<NSFetchRequestResult> = NSFetchRequest(entityName: entityName)
+        let fetch: NSFetchRequest<NSFetchRequestResult> = NSFetchRequest(entityName: entityName)
 		fetch.predicate = NSPredicate(format: predicateString)
 		
 		let results = try? self.fetch(fetch)

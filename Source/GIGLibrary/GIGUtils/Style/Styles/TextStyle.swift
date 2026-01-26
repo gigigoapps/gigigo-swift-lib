@@ -8,12 +8,14 @@ public struct TextStyle {
     let isUnderlined: Bool
     let letterSpacing: CGFloat?
     
-    public init(font: UIFont,
-                 foregroundColor: UIColor = .black,
-                 backgroundColor: UIColor = .clear,
-                 isStrikedThrough: Bool = false,
-                 isUnderlined: Bool = false,
-                 letterSpacing: CGFloat? = nil) {
+    public init(
+        font: UIFont,
+        foregroundColor: UIColor = .black,
+        backgroundColor: UIColor = .clear,
+        isStrikedThrough: Bool = false,
+        isUnderlined: Bool = false,
+        letterSpacing: CGFloat? = nil
+    ) {
         self.font = font
         self.foregroundColor = foregroundColor
         self.backgroundColor = backgroundColor

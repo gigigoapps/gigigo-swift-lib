@@ -56,10 +56,6 @@ open class GIGScannerVC: UIViewController, AVCaptureMetadataOutputObjectsDelegat
 		}
 	}
 	
-	override open func didReceiveMemoryWarning() {
-		super.didReceiveMemoryWarning()
-	}
-	
 	// MARK: - PUBLIC
 	
 	public func startScanning() {

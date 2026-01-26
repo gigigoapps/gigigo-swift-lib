@@ -295,9 +295,7 @@ open class KeychainStore {
     }
 
     public subscript(attributes key: String) -> Attributes? {
-        get {
-            return try? self.get(key) { $0 }
-        }
+        return try? self.get(key) { $0 }
     }
 
     // MARK: Deletion
@@ -365,7 +363,9 @@ open class KeychainStore {
         case errSecSuccess:
             if let items = result as? [[String: Any]] {
                 return self.prettify(items: items).map {
-                    return (($0["service"] ?? "") as! String, ($0["key"] ?? "") as! String)
+                    let service = $0["service"] as? String ?? ""
+                    let key = $0["key"] as? String ?? ""
+                    return (service, key)
                 }
             }
         case errSecItemNotFound:
@@ -457,7 +457,7 @@ open class KeychainStore {
             if let data = attributes[KeychainConstants.ValueData] as? Data {
                 if let text = String(data: data, encoding: .utf8) {
                     item["value"] = text
-                } else  {
+                } else {
                     item["value"] = data
                 }
             }
@@ -514,7 +514,7 @@ extension CFError {
     var error: NSError {
         let domain = CFErrorGetDomain(self) as String
         let code = CFErrorGetCode(self)
-        let userInfo = CFErrorCopyUserInfo(self) as! [String: Any]
+        let userInfo = CFErrorCopyUserInfo(self) as? [String: Any] ?? [:]
 
         return NSError(domain: domain, code: code, userInfo: userInfo)
     }

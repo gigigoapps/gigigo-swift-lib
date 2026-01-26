@@ -170,9 +170,9 @@ open class InfiniteCollectionView: UICollectionView {
             // Amount left over to correct for
             let offsetCorrection = (abs(cellcount).truncatingRemainder(dividingBy: 1)) * cellWidth
             // Scroll back to the centre of the view, offset by the correction to ensure it's not noticeable
-            if contentOffset.x < centerOffsetX { //left scrolling
+            if contentOffset.x < centerOffsetX { // left scrolling
                 contentOffset = CGPoint(x: centerOffsetX - offsetCorrection, y: currentOffset.y)
-            } else if contentOffset.x > centerOffsetX { //right scrolling
+            } else if contentOffset.x > centerOffsetX { // right scrolling
                 contentOffset = CGPoint(x: centerOffsetX + offsetCorrection, y: currentOffset.y)
             }
             // Make content shift as per shiftCells

@@ -11,7 +11,7 @@ import UIKit
 
 open class Application {
 	
-	public init(){}
+	public init() {}
 	
 	
 	// MARK: - App Info

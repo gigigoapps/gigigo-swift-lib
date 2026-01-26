@@ -11,7 +11,7 @@ import Foundation
 struct KeychainOptions {
     
     var service: String = ""
-    var accessGroup: String? = nil
+    var accessGroup: String?
 
     var accessibility: KeychainAccessibility = .afterFirstUnlock
     var authenticationPolicy: KeychainAuthenticationPolicy?

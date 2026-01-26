@@ -10,7 +10,7 @@ import Foundation
 import UIKit
 
 
-public let kGIGNetworkErrorDomain = "com.gigigo.network";
+public let kGIGNetworkErrorDomain = "com.gigigo.network"
 public let kGIGNetworkErrorMessage = "GIGNETWORK_ERROR_MESSAGE"
 
 
@@ -64,7 +64,7 @@ public class Response: Selfie {
 			}
 			
 			if let contentType = self.headers?["Content-Type"] as? String,
-				contentType.contains("json"){
+				contentType.contains("json") {
                 self.parseJSON()
 			}
 		} else {
@@ -114,7 +114,7 @@ public class Response: Selfie {
 		}
 	}
 	
-	private func parseError(json: JSON) ->  ResponseStatus {
+	private func parseError(json: JSON) -> ResponseStatus {
 		let error = json["error"]
 		
 		guard

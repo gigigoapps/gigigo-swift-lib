@@ -10,7 +10,7 @@ extension UIView: ViewStylable {
         self.layer.shadowOpacity = style.shadowOpacity
         self.layer.shadowRadius = style.shadowRadius
         
-        //Borders
+        // Borders
         resetBorders()
         
         // All borders
@@ -30,7 +30,7 @@ extension UIView: ViewStylable {
             }
         }
         
-        //Rounded rectangle
+        // Rounded rectangle
         if let cornerRadius = style.cornerRadius {
             self.layer.cornerRadius = cornerRadius
             self.layer.masksToBounds = true

@@ -206,11 +206,11 @@ struct RequestTests {
         // Given
         var capturedRequest: URLRequest?
 
-        MockURLProtocol.respond(path: "/api/resource") { request in
+        MockURLProtocol.respond(path: "/api/resource-request") { request in
             capturedRequest = request
         }
 
-        let baseUrl = "https://example.com/api/resource?existing=one&token=abc"
+        let baseUrl = "https://example.com/api/resource-request?existing=one&token=abc"
         let request = Request(
             baseUrl: baseUrl,
             endpoint: "",
@@ -235,7 +235,7 @@ struct RequestTests {
             queryItems.first(where: { $0.name == name })?.value
         }
 
-        #expect(components.path == "/api/resource")
+        #expect(components.path == "/api/resource-request")
         #expect(queryValue("existing") == "one")
         #expect(queryValue("token") == "abc")
         #expect(queryValue("foo") == "bar")
@@ -436,7 +436,7 @@ struct RequestTests {
         // Given
         let spy = NetworkLogManagerSpy()
 
-        MockURLProtocol.respond(path: "/log") { _ in }
+        MockURLProtocol.respond(path: "/log", method: .post) { _ in }
 
         let request = Request.testRequest(
             method: .post,
@@ -466,12 +466,12 @@ struct RequestTests {
         // Given
         let spy = NetworkLogManagerSpy()
 
-        MockURLProtocol.respond(path: "/body") { _ in }
+        MockURLProtocol.respond(path: "/body-request") { _ in }
 
         let request = Request.testRequest(
             method: .post,
             baseUrl: "https://example.com",
-            endpoint: "/body",
+            endpoint: "/body-request",
             bodyParams: ["name": "Taylor", "count": 3],
             verbose: true,
             networkLogManager: spy

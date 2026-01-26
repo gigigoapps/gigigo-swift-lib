@@ -33,7 +33,7 @@ public enum LogStyle: Int {
 }
 
 
-public func >=(levelA: LogLevel, levelB: LogLevel) -> Bool {
+public func >= (levelA: LogLevel, levelB: LogLevel) -> Bool {
     return levelA.rawValue >= levelB.rawValue
 }
 
@@ -236,7 +236,7 @@ public class LogManager {
         }
     }
     
-    //PRIVATE SECTION
+    // PRIVATE SECTION
     
     private func getSettingsForModuleNonSynchronized(_ module: LoggableModule.Type?) -> LogManagerSettings {
         var settings: LogManagerSettings! = self.defaultSettings

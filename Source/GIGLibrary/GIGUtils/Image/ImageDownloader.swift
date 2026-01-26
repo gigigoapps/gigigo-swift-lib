@@ -96,7 +96,7 @@ struct ImageDownloader {
     private func setAnimated(image: UIImage?, in view: UIImageView) {
         UIView.transition(
             with: view,
-            duration:0.4,
+            duration: 0.4,
             options: .transitionCrossDissolve,
             animations: {
                 view.image = image

@@ -20,7 +20,7 @@ public extension UIView {
             contentsOf: NSLayoutConstraint.constraints(withVisualFormat: "H:|[childView]|",
                 options: .alignmentMask,
                 metrics: nil,
-                views: ["childView" : childView]
+                views: ["childView": childView]
             )
         )
         
@@ -28,7 +28,7 @@ public extension UIView {
             contentsOf: NSLayoutConstraint.constraints(withVisualFormat: "V:|[childView]|",
                 options: .alignmentMask,
                 metrics: nil,
-                views: ["childView" : childView]
+                views: ["childView": childView]
             )
         )
         
