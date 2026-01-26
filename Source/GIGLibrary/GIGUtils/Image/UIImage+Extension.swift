@@ -99,8 +99,8 @@ extension UIImage {
         UIGraphicsBeginImageContextWithOptions(newSize, false, 0.0)
         self.draw(in: CGRect(x: 0, y: 0, width: newSize.width, height: newSize.height))
         let newImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext();
-        return newImage;
+        UIGraphicsEndImageContext()
+        return newImage
     }
     
     // MARK: - Private Helpers
@@ -166,7 +166,7 @@ extension UIImage {
         }
     }
     
-    internal class func gcdForArray(_ array: Array<Int>) -> Int {
+    internal class func gcdForArray(_ array: [Int]) -> Int {
         if array.isEmpty {
             return 1
         }

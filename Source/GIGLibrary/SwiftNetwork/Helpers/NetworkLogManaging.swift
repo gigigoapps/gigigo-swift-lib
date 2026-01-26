@@ -13,8 +13,6 @@ protocol NetworkLogManaging {
 }
 
 struct DefaultNetworkLogManager: NetworkLogManaging {
-    init() {}
-
     func log(_ message: String, info: RequestLogInfo?) {
         guard let info else {
             print(message)

@@ -4,8 +4,6 @@ import UIKit
 
 // MARK: Extensions
 
-// swiftlint:disable file_length
-
 public extension String {
     
     /**
@@ -188,7 +186,7 @@ public extension NSAttributedString {
                 data: htmlData,
                 options: [
                     NSAttributedString.DocumentReadingOptionKey.documentType: NSAttributedString.DocumentType.html,
-                    NSAttributedString.DocumentReadingOptionKey.characterEncoding: String.Encoding.utf8.rawValue,
+                    NSAttributedString.DocumentReadingOptionKey.characterEncoding: String.Encoding.utf8.rawValue
                 ],
                 documentAttributes: nil
             )
@@ -220,7 +218,7 @@ extension Data {
                 data: self,
                 options: [
                     NSAttributedString.DocumentReadingOptionKey.documentType: NSAttributedString.DocumentType.html,
-                    NSAttributedString.DocumentReadingOptionKey.characterEncoding: String.Encoding.utf8.rawValue,
+                    NSAttributedString.DocumentReadingOptionKey.characterEncoding: String.Encoding.utf8.rawValue
                 ],
                 documentAttributes: nil)
         } catch let error as NSError {
@@ -302,7 +300,7 @@ public enum Style {
     case rightAligment
     case lineSpacing(CGFloat)
     
-    // swiftlint:disable cyclomatic_complexity
+    // swiftlint:disable:next cyclomatic_complexity
     func key() -> String {
         
         switch self {
@@ -348,7 +346,7 @@ public enum Style {
         }
     }
     
-    // swiftlint:disable function_body_length
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     func value(forFont font: UIFont) -> AnyObject {
         
         switch self {
@@ -523,14 +521,13 @@ func aligmentString(fromAligment aligment: NSTextAlignment) -> String {
     }
 }
 
-// swiftlint:disable cyclomatic_complexity
-
 extension UIFont {
     
     func isSystemFont() -> Bool {
         return self.familyName == UIFont.systemFont(ofSize: UIFont.systemFontSize).familyName
     }
     
+    // swiftlint:disable:next cyclomatic_complexity
     func weight() -> UIFont.Weight {
         
         let fontAttributeKey = UIFontDescriptor.AttributeName(rawValue: "NSCTFontUIUsageAttribute")
@@ -595,5 +592,3 @@ extension UIFont {
         }
     }
 }
-
-// swiftlint:enable cyclomatic_complexity

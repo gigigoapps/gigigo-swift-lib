@@ -10,6 +10,7 @@ import Foundation
 import UIKit
 import CoreImage.CIFilterBuiltins
 
+// swiftlint:disable:next type_name
 open class QR {
     
 	open class func generate(_ string: String) -> UIImage? {

@@ -327,7 +327,8 @@ struct SwiftNetworkIntegrationTests {
             path: "/log",
             statusCode: 200,
             headers: ["X-Response": "yes"],
-            data: Data()
+            data: Data(),
+            method: .get
         )
         let request = Request.testRequest(
             baseUrl: "https://example.com",

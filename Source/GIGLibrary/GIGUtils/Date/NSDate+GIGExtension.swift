@@ -93,49 +93,49 @@ public extension Date {
 
 
 /// Add days to a date
-public func +(date: Date, days: Int) -> Date {
+public func + (date: Date, days: Int) -> Date {
 	date.dateAdding(days)
 }
 
 /// Substract days to a date
-public func -(date: Date, days: Int) -> Date {
+public func - (date: Date, days: Int) -> Date {
 	let newDate = date + (-days)
 	return newDate
 }
 
 
-//public func >(lhs: Date, rhs: Date) -> Bool {
-//	let result = lhs.compare(rhs)
-//	
-//	switch result {
-//	case .orderedDescending:
-//		return true
-//	
-//	default:
-//		return false
-//	}
-//}
-//
-//public func <(lhs: Date, rhs: Date) -> Bool {
-//	let result = lhs.compare(rhs)
-//	
-//	switch result {
-//	case .orderedAscending:
-//		return true
-//		
-//	default:
-//		return false
-//	}
-//}
-//
-//public func ==(lhs: Date, rhs: Date) -> Bool {
-//	let result = lhs.compare(rhs)
-//	
-//	switch result {
-//	case .orderedSame:
-//		return true
-//		
-//	default:
-//		return false
-//	}
-//}
+// public func >(lhs: Date, rhs: Date) -> Bool {
+// 	let result = lhs.compare(rhs)
+// 	
+// 	switch result {
+// 	case .orderedDescending:
+// 		return true
+// 	
+// 	default:
+// 		return false
+// 	}
+// }
+// 
+// public func <(lhs: Date, rhs: Date) -> Bool {
+// 	let result = lhs.compare(rhs)
+// 	
+// 	switch result {
+// 	case .orderedAscending:
+// 		return true
+// 		
+// 	default:
+// 		return false
+// 	}
+// }
+// 
+// public func ==(lhs: Date, rhs: Date) -> Bool {
+// 	let result = lhs.compare(rhs)
+// 	
+// 	switch result {
+// 	case .orderedSame:
+// 		return true
+// 		
+// 	default:
+// 		return false
+// 	}
+// }

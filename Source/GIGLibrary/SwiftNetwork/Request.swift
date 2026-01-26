@@ -404,25 +404,19 @@ public class Request: Selfie {
     
     fileprivate func buildUploadData(files: [FileUploadData], params: [String: Any], boundary: String) -> Data {
         var data = Data()
-        guard let boundaryData = "\r\n--\(boundary)\r\n".data(using: .utf8) else { return data }
+        let boundaryData = Data("\r\n--\(boundary)\r\n".utf8)
 
         for (key, value) in params {
-            guard
-                let keyData = "Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n".data(using: .utf8),
-                let valueData = "\(value)".data(using: .utf8) else {
-                return data
-            }
+            let keyData = Data("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n".utf8)
+            let valueData = Data("\(value)".utf8)
             data.append(boundaryData)
             data.append(keyData)
             data.append(valueData)
         }
         
         for file in files {
-            guard
-                let contentDispositionData = "Content-Disposition: form-data; name=\"\(file.name)\"; filename=\"\(file.filename)\"\r\n".data(using: .utf8),
-                let contentTypeData = "Content-Type: \(file.mimeType)\r\n\r\n".data(using: .utf8) else {
-                    return data
-            }
+            let contentDispositionData = Data("Content-Disposition: form-data; name=\"\(file.name)\"; filename=\"\(file.filename)\"\r\n".utf8)
+            let contentTypeData = Data("Content-Type: \(file.mimeType)\r\n\r\n".utf8)
             data.append(boundaryData)
             data.append(contentDispositionData)
             data.append(contentTypeData)

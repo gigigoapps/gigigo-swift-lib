@@ -22,7 +22,7 @@ open class AlertController: NSObject, AlertInterface {
         self.alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
     }
     
-    internal init(title: String, message: String, style:UIAlertController.Style) {
+    internal init(title: String, message: String, style: UIAlertController.Style) {
         self.alert = UIAlertController(title: title, message: message, preferredStyle: style)
     }
     
@@ -30,7 +30,7 @@ open class AlertController: NSObject, AlertInterface {
 		Application().presentModal(self.alert)
     }
     
-    open func addDefaultButton(_ title: String, usingAction:((String) -> Void)?) {
+    open func addDefaultButton(_ title: String, usingAction: ((String) -> Void)?) {
         let action = UIAlertAction(title: title, style: .default) { action in
 			guard let usingAction = usingAction else { return }
             usingAction(action.title!)
@@ -38,7 +38,7 @@ open class AlertController: NSObject, AlertInterface {
         self.alert.addAction(action)
     }
     
-    open func addCancelButton(_ title: String, usingAction:((String) -> Void)?) {
+    open func addCancelButton(_ title: String, usingAction: ((String) -> Void)?) {
         let action = UIAlertAction(title: title, style: .cancel) { action in
 			guard let usingAction = usingAction else { return }
             usingAction(action.title!)
@@ -46,7 +46,7 @@ open class AlertController: NSObject, AlertInterface {
         self.alert.addAction(action)
     }
     
-    open func addDestructiveButton(_ title: String, usingAction:((String) -> Void)?) {
+    open func addDestructiveButton(_ title: String, usingAction: ((String) -> Void)?) {
         let action = UIAlertAction(title: title, style: .destructive) { action in
 			guard let usingAction = usingAction else { return }
             usingAction(action.title!)

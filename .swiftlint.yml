@@ -1,0 +1,24 @@
+disabled_rules: # rule identifiers to exclude from running
+  - trailing_whitespace
+  - line_length
+  - todo
+  - vertical_whitespace
+  - function_parameter_count
+  - inclusive_language
+  - identifier_name
+
+excluded:
+  - .build
+  - Source/GIGLibraryTests
+
+type_body_length:
+  warning: 400
+  error: 600
+
+file_length:
+  warning: 600
+  error: 800
+
+large_tuple:
+  warning: 3
+  error: 4

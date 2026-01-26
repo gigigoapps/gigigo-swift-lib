@@ -9,7 +9,7 @@
 import UIKit
 import AVFoundation
 
-public protocol GIGScannerDelegate {
+public protocol GIGScannerDelegate: AnyObject {
 	
 	func didSuccessfullyScan(_ scannedValue: String, tye: String)
 }
@@ -35,9 +35,8 @@ open class GIGScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 		
 		do {
 			self.input = try AVCaptureDeviceInput(device: device)
-		}
-		catch _ {
-			//Error handling, if needed
+		} catch {
+			// Error handling, if needed
 		}
 		
 		super.init(coder: aDecoder)
@@ -70,12 +69,12 @@ open class GIGScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 			return false
 			
 		case AVAuthorizationStatus.notDetermined:
-			AVCaptureDevice.requestAccess(for: AVMediaType.video, completionHandler: { success in
+			AVCaptureDevice.requestAccess(for: AVMediaType.video, completionHandler: { _ in
 				//                return true
 			})
 			return true
 		@unknown default:
-			AVCaptureDevice.requestAccess(for: AVMediaType.video, completionHandler: { success in
+			AVCaptureDevice.requestAccess(for: AVMediaType.video, completionHandler: { _ in
 				//                return true
 			})
 			return true
@@ -101,14 +100,17 @@ open class GIGScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 	
 	public func enableTorch(_ enable: Bool) {
 		
-		try! self.device.lockForConfiguration()
+		do {
+			try self.device.lockForConfiguration()
+		} catch {
+			return
+		}
 		
 		if self.device.hasTorch {
 			
 			if enable {
 				self.device.torchMode = .on
-			}
-			else {
+			} else {
 				self.device.torchMode = .off
 			}
 			
@@ -147,7 +149,7 @@ open class GIGScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 	func setupOutputWithDefaultValues() -> [AVMetadataObject.ObjectType] {
 		let metadata = [AVMetadataObject.ObjectType.upce, AVMetadataObject.ObjectType.code39, AVMetadataObject.ObjectType.code39Mod43,
 						AVMetadataObject.ObjectType.ean13, AVMetadataObject.ObjectType.ean8, AVMetadataObject.ObjectType.code93, AVMetadataObject.ObjectType.code128,
-						AVMetadataObject.ObjectType.pdf417, AVMetadataObject.ObjectType.aztec, AVMetadataObject.ObjectType.qr];
+						AVMetadataObject.ObjectType.pdf417, AVMetadataObject.ObjectType.aztec, AVMetadataObject.ObjectType.qr]
 		
 		return metadata
 	}

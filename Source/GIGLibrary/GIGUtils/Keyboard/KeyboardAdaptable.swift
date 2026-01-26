@@ -36,11 +36,11 @@ public extension KeyboardAdaptable where Self: UIViewController {
 	}
 	
 	// MARK: - Optional Public Methods
-	func keyboardWillShow(){}
-	func keyboardDidShow(){}
-	func keyboardWillHide(){}
-	func keyboardDidHide(){}
-    func keyboardChangeFrame(_ size: CGSize){}
+	func keyboardWillShow() {}
+	func keyboardDidShow() {}
+	func keyboardWillHide() {}
+	func keyboardDidHide() {}
+    func keyboardChangeFrame(_ size: CGSize) {}
 	
 	
 	// MARK: - Private Helpers
@@ -65,7 +65,7 @@ public extension KeyboardAdaptable where Self: UIViewController {
 				changes: {
 					if var appHeight = UIApplication.shared.keyWindow?.frame.height {
                         if self.navigationController != nil {
-                            appHeight = appHeight - (self.navigationController?.navigationBar.frame.size.height ?? 0)
+                            appHeight -= self.navigationController?.navigationBar.frame.size.height ?? 0
                         }
                         if #available(iOS 11.0, *) {
                             let safeAreaInsetsBottomHeight = (UIApplication.shared.keyWindow?.safeAreaInsets.bottom ?? 0)
@@ -88,10 +88,10 @@ public extension KeyboardAdaptable where Self: UIViewController {
 		Keyboard.willHide { notification in
 			self.keyboardWillHide()
 			self.animateKeyboardChanges(notification,
-				changes:  {
+				changes: {
 					if var appHeight = UIApplication.shared.keyWindow?.frame.height {
                         if self.navigationController != nil {
-                            appHeight = appHeight - (self.navigationController?.navigationBar.frame.size.height ?? 0)
+                            appHeight -= self.navigationController?.navigationBar.frame.size.height ?? 0
                         }
                         let statusBarHeight = UIApplication.shared.statusBarFrame.size.height
 						self.view.frame.size.height = appHeight - statusBarHeight
@@ -187,7 +187,7 @@ class Keyboard {
 	}
 	
 	
-	// MARK - Private Helpers
+	// MARK: - Private Helpers
 	
 	fileprivate class func keyboardEvent(_ event: String, notificationHandler: @escaping (Notification) -> Void) {
 		let observer = NotificationCenter.default

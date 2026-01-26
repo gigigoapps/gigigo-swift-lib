@@ -75,9 +75,7 @@ public struct Attributes {
     }
 
     public subscript(key: String) -> Any? {
-        get {
-            return self.attributes[key]
-        }
+        return self.attributes[key]
     }
 }
 

@@ -15,14 +15,14 @@ public enum ErrorInstantiation: Error {
 }
 
 @MainActor public protocol Instantiable {
-    static var storyboard: String {get}
-    static var bundle: Bundle {get}
-    static var identifier: String {get}
+    static var storyboard: String { get }
+    static var bundle: Bundle { get }
+    static var identifier: String { get }
 }
 
 public extension Instantiable where Self: UIViewController {
-    static var identifier: String { get{ return "" } }
-    static var bundle: Bundle { get{ return Bundle(for: Self.self) } }
+    static var identifier: String { "" }
+    static var bundle: Bundle { Bundle(for: Self.self) }
 }
 
 public extension Instantiable {
@@ -59,5 +59,3 @@ public extension Instantiable {
         return downcastedVC
     }
 }
-
-
