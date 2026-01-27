@@ -68,14 +68,10 @@ public extension KeyboardAdaptable where Self: UIViewController {
                         if self.navigationController != nil {
                             appHeight -= self.navigationController?.navigationBar.frame.size.height ?? 0
                         }
-                        if #available(iOS 11.0, *) {
-							let safeAreaInsetsBottomHeight = window.safeAreaInsets.bottom
-							let safeAreaInsetsTopHeight = window.safeAreaInsets.top
-                            let statusBarHeight = UIApplication.shared.statusBarFrame.size.height
-							self.view.frame.size.height = appHeight - safeAreaInsetsBottomHeight + safeAreaInsetsTopHeight - statusBarHeight - size.height
-                        } else {
-							self.view.frame.size.height = appHeight - size.height
-                        }
+                        let safeAreaInsetsBottomHeight = window.safeAreaInsets.bottom
+                        let safeAreaInsetsTopHeight = window.safeAreaInsets.top
+                        let statusBarHeight = UIApplication.shared.statusBarFrame.size.height
+                        self.view.frame.size.height = appHeight - safeAreaInsetsBottomHeight + safeAreaInsetsTopHeight - statusBarHeight - size.height
                     }
 				},
 				onCompletion: {
