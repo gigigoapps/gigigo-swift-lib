@@ -80,7 +80,7 @@ extension UIView {
     
     public func show(alertContainerView: UIView, blurEffectView: UIVisualEffectView) {
         self.isHidden = true
-        guard let window = UIApplication.shared.keyWindow else { return }
+        guard let window = UIApplication.shared.activeWindow else { return }
         window.endEditing(true)
         window.addSubview(self)
         self.layout(using: [

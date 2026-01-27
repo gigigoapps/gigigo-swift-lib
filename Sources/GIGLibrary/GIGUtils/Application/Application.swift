@@ -52,7 +52,7 @@ open class Application {
 	
 	private func topViewController() -> UIViewController? {
 		let app = UIApplication.shared
-		let window = app.keyWindow
+		let window = app.activeWindow
 		var rootVC = window?.rootViewController
 		while let presentedController = rootVC?.presentedViewController {
 			rootVC = presentedController
