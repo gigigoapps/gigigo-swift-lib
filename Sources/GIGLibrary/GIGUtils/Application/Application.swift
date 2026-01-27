@@ -33,11 +33,7 @@ open class Application {
 			return LogWarn("Can not open url: \(urlString)")
 		}
 		
-		if #available(iOS 10.0, *) {
-			UIApplication.shared.open(url)
-		} else {
-			UIApplication.shared.openURL(url)
-		}
+		UIApplication.shared.open(url)
 	}
 	
 	public func presentModal(_ viewController: UIViewController) {

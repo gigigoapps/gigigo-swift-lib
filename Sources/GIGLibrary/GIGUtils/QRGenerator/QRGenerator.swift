@@ -44,25 +44,13 @@ open class QR {
 	
 	fileprivate class func generate(_ string: String) -> CGImage? {
         let context = CIContext()
-        if #available(iOS 13.0, *) {
-            let filter = CIFilter.qrCodeGenerator()
-            filter.message = Data(string.utf8)
-            let transform = CGAffineTransform(scaleX: 10, y: 10)
-            guard let outputImage = filter.outputImage?.transformed(by: transform),
-                  let cgimg = context.createCGImage(outputImage, from: outputImage.extent) else {
-                    return nil
-            }
-            return cgimg
-        } else {
-            let stringData = string.data(using: String.Encoding.utf8)
-            let filter = CIFilter(name: "CIQRCodeGenerator")
-            filter?.setValue(stringData, forKey: "inputMessage")
-            filter?.setValue("H", forKey: "inputCorrectionLevel")
-            guard let outputImage = filter?.outputImage,
-                  let cgimg = context.createCGImage(outputImage, from: outputImage.extent) else {
-                    return nil
-            }
-            return cgimg
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(string.utf8)
+        let transform = CGAffineTransform(scaleX: 10, y: 10)
+        guard let outputImage = filter.outputImage?.transformed(by: transform),
+              let cgimg = context.createCGImage(outputImage, from: outputImage.extent) else {
+                return nil
         }
+        return cgimg
 	}
 }

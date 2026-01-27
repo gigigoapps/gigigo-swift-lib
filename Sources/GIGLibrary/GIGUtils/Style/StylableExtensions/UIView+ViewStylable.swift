@@ -22,11 +22,7 @@ extension UIView: ViewStylable {
         // Some borders - not dotted border
         else if style.someBorders.count > 0 {
             style.someBorders.forEach {
-                if #available(iOS 9.0, *) {
-                    self.addSomeBorders($0, weight: style.borderWidth, color: style.borderColor)
-                } else {
-                    // Fallback on earlier versions
-                }
+                self.addSomeBorders($0, weight: style.borderWidth, color: style.borderColor)
             }
         }
         

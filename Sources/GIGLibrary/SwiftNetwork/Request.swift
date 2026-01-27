@@ -305,9 +305,7 @@ public class Request: Selfie {
 
         let configuration = self.sessionConfiguration ?? URLSessionConfiguration.default
         configuration.timeoutIntervalForResource = self.timeout
-        if #available(iOS 11, *) {
-            configuration.waitsForConnectivity = true
-        }
+        configuration.waitsForConnectivity = true
         if applyCache {
             self.controlCache(config: configuration)
         }

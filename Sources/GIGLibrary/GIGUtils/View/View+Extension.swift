@@ -46,9 +46,7 @@ extension UIView {
     
     public func setCornerRadius(to radius: CGFloat = 8) {
         self.layer.cornerRadius = radius
-        if #available(iOS 13.0, *) {
-            self.layer.cornerCurve = .continuous
-        }
+        self.layer.cornerCurve = .continuous
     }
     
     public func layout(using constraints: [NSLayoutConstraint]) {

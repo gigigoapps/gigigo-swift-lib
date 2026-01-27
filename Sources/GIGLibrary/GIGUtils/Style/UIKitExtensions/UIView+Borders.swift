@@ -11,7 +11,6 @@ private final class BorderView: UIView { }
 
 public extension UIView {
     
-    @available(iOS 9.0, *)
     func addSomeBorders(_ border: Border, weight: CGFloat, color: UIColor) {
 		
 		resetBorder(border)
