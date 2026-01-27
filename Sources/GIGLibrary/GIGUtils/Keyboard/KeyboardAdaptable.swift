@@ -63,7 +63,8 @@ public extension KeyboardAdaptable where Self: UIViewController {
             }
 			self.animateKeyboardChanges(notification,
 				changes: {
-					if let window = UIApplication.shared.activeWindow, var appHeight = window.frame.height {
+					if let window = UIApplication.shared.activeWindow {
+                        var appHeight = window.frame.height
                         if self.navigationController != nil {
                             appHeight -= self.navigationController?.navigationBar.frame.size.height ?? 0
                         }
@@ -89,7 +90,8 @@ public extension KeyboardAdaptable where Self: UIViewController {
 			self.keyboardWillHide()
 			self.animateKeyboardChanges(notification,
 				changes: {
-					if let window = UIApplication.shared.activeWindow, var appHeight = window.frame.height {
+					if let window = UIApplication.shared.activeWindow {
+                        var appHeight = window.frame.height
                         if self.navigationController != nil {
                             appHeight -= self.navigationController?.navigationBar.frame.size.height ?? 0
                         }
