@@ -213,11 +213,7 @@ open class KeychainStore {
     public func set(_ value: Data, key: String, ignoringAttributeSynchronizable: Bool = true) throws {
         var query = self.options.query(ignoringAttributeSynchronizable: ignoringAttributeSynchronizable)
         query[KeychainConstants.AttributeAccount] = key
-        if #available(iOS 9.0, *) {
-            query[KeychainConstants.UseAuthenticationUI] = KeychainConstants.UseAuthenticationUIFail
-        } else {
-            query[KeychainConstants.UseNoAuthenticationUI] = kCFBooleanTrue
-        }
+        query[KeychainConstants.UseAuthenticationUI] = KeychainConstants.UseAuthenticationUIFail
 
         var status = SecItemCopyMatching(query as CFDictionary, nil)
         switch status {
@@ -230,14 +226,9 @@ open class KeychainStore {
 
             self.options.attributes.forEach { attributes.updateValue($1, forKey: $0) }
 
-            if status == errSecInteractionNotAllowed && floor(NSFoundationVersionNumber) <= floor(NSFoundationVersionNumber_iOS_8_0) {
-                try self.remove(key)
-                try self.set(value, key: key)
-            } else {
-                status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-                if status != errSecSuccess {
-                    throw self.securityError(status: status)
-                }
+            status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+            if status != errSecSuccess {
+                throw self.securityError(status: status)
             }
         case errSecItemNotFound:
             var (attributes, error) = self.options.attributes(key: key, value: value)
@@ -324,11 +315,7 @@ open class KeychainStore {
         query[KeychainConstants.AttributeAccount] = key
 
         if withoutAuthenticationUI {
-            if #available(iOS 9.0, *) {
-                query[KeychainConstants.UseAuthenticationUI] = KeychainConstants.UseAuthenticationUIFail
-            } else {
-                query[KeychainConstants.UseNoAuthenticationUI] = kCFBooleanTrue
-            }
+            query[KeychainConstants.UseAuthenticationUI] = KeychainConstants.UseAuthenticationUIFail
         }
         
         let status = SecItemCopyMatching(query as CFDictionary, nil)
