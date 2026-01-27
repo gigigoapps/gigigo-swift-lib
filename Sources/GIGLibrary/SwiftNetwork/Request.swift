@@ -347,8 +347,7 @@ public class Request: Selfie {
             }
 			
 			// Add Content-Type if it wasn't set
-			if let containsContentType = request.allHTTPHeaderFields?.keys.contains("Content-Type"),
-				!containsContentType {
+			if request.allHTTPHeaderFields?.keys.contains(where: { $0.caseInsensitiveCompare("Content-Type") == .orderedSame }) != true {
 				request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 			}
 		}
