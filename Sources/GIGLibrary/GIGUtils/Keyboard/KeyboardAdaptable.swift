@@ -63,13 +63,13 @@ public extension KeyboardAdaptable where Self: UIViewController {
             }
 			self.animateKeyboardChanges(notification,
 				changes: {
-					if var appHeight = UIApplication.shared.keyWindow?.frame.height {
+					if let window = UIApplication.shared.activeWindow, var appHeight = window.frame.height {
                         if self.navigationController != nil {
                             appHeight -= self.navigationController?.navigationBar.frame.size.height ?? 0
                         }
                         if #available(iOS 11.0, *) {
-                            let safeAreaInsetsBottomHeight = (UIApplication.shared.keyWindow?.safeAreaInsets.bottom ?? 0)
-                            let safeAreaInsetsTopHeight = (UIApplication.shared.keyWindow?.safeAreaInsets.top ?? 0)
+							let safeAreaInsetsBottomHeight = window.safeAreaInsets.bottom
+							let safeAreaInsetsTopHeight = window.safeAreaInsets.top
                             let statusBarHeight = UIApplication.shared.statusBarFrame.size.height
 							self.view.frame.size.height = appHeight - safeAreaInsetsBottomHeight + safeAreaInsetsTopHeight - statusBarHeight - size.height
                         } else {
@@ -89,7 +89,7 @@ public extension KeyboardAdaptable where Self: UIViewController {
 			self.keyboardWillHide()
 			self.animateKeyboardChanges(notification,
 				changes: {
-					if var appHeight = UIApplication.shared.keyWindow?.frame.height {
+					if let window = UIApplication.shared.activeWindow, var appHeight = window.frame.height {
                         if self.navigationController != nil {
                             appHeight -= self.navigationController?.navigationBar.frame.size.height ?? 0
                         }
