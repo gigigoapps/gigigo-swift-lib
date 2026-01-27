@@ -49,12 +49,7 @@ struct KeychainConstants {
 
     /** Other Constants */
 
-    @available(iOS, introduced: 8.0, deprecated: 9.0, message: "Use a UseAuthenticationUI instead.")
-    static let UseNoAuthenticationUI = String(kSecUseNoAuthenticationUI)
-    @available(iOS 9.0, *)
     static let UseAuthenticationUI = String(kSecUseAuthenticationUI)
-    @available(iOS 9.0, *)
     static let UseAuthenticationContext = String(kSecUseAuthenticationContext)
-    @available(iOS 9.0, *)
     static let UseAuthenticationUIFail = String(kSecUseAuthenticationUIFail)
 }

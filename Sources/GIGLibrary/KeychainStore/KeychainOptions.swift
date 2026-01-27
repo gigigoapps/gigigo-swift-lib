@@ -45,10 +45,8 @@ extension KeychainOptions {
             query[KeychainConstants.AttributeSynchronizable] = self.synchronizable ? kCFBooleanTrue : kCFBooleanFalse
         }
 
-        if #available(iOS 9.0, *) {
-            if let authenticationContext = self.authenticationContext {
-                query[KeychainConstants.UseAuthenticationContext] = authenticationContext
-            }
+        if let authenticationContext = self.authenticationContext {
+            query[KeychainConstants.UseAuthenticationContext] = authenticationContext
         }
         return query
     }
