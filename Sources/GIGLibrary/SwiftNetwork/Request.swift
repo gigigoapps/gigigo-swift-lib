@@ -334,6 +334,9 @@ public class Request: Selfie {
 		var request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: self.timeout)
 		request.httpMethod = self.method.rawValue
 		request.allHTTPHeaderFields = self.headers
+        if request.allHTTPHeaderFields?.keys.contains(where: { $0.caseInsensitiveCompare("Accept") == .orderedSame }) != true {
+            request.addValue("application/json", forHTTPHeaderField: "Accept")
+        }
 		
 		// Set body is not GET
 		if self.method != .get {
@@ -344,8 +347,7 @@ public class Request: Selfie {
             }
 			
 			// Add Content-Type if it wasn't set
-			if let containsContentType = request.allHTTPHeaderFields?.keys.contains("Content-Type"),
-				!containsContentType {
+			if request.allHTTPHeaderFields?.keys.contains(where: { $0.caseInsensitiveCompare("Content-Type") == .orderedSame }) != true {
 				request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 			}
 		}
