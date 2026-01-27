@@ -115,6 +115,35 @@ struct RequestTests {
         #expect(urlRequest.value(forHTTPHeaderField: "Content-Type") != "application/json")
     }
 
+    @Test("Given a request with a custom Accept header, when fetch is called, then it keeps the custom value and does not inject application/json")
+    func fetchKeepsCustomAcceptHeader() async throws {
+        // Given
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.respond(path: "/custom-accept") { request in
+            capturedRequest = request
+        }
+
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/custom-accept",
+            headers: ["Accept": "text/plain"]
+        )
+
+        // When
+        _ = await withCheckedContinuation { continuation in
+            request.fetch { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        // Then
+        let urlRequest = try #require(capturedRequest)
+
+        #expect(urlRequest.value(forHTTPHeaderField: "Accept") == "text/plain")
+        #expect(urlRequest.value(forHTTPHeaderField: "Accept") != "application/json")
+    }
+
     @Test("Given a GET request with empty body params and headers, when fetch is called, then it does not add a body or Content-Type header")
     func fetchDoesNotSetBodyOrContentTypeForEmptyGet() async throws {
         // Given
@@ -492,8 +521,107 @@ struct RequestTests {
         #expect(message.contains("\"count\" : 3"))
     }
 
-    @Test("Given verbose requests with and without headers, when fetch is called, then log includes headers only when present")
-    func requestLogIncludesHeadersOnlyWhenPresent() async throws {
+    @Test("Given a verbose POST request without headers, when fetch is called, then request log includes default headers")
+    func requestLogIncludesDefaultHeadersForPost() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+
+        MockURLProtocol.respond(path: "/post-default-headers") { _ in }
+
+        let request = Request.testRequest(
+            method: .post,
+            baseUrl: "https://example.com",
+            endpoint: "/post-default-headers",
+            bodyParams: ["name": "Taylor"],
+            verbose: true,
+            networkLogManager: spy
+        )
+
+        // When
+        _ = await withCheckedContinuation { continuation in
+            request.fetch { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        // Then
+        let message = try #require(spy.messages.first)
+
+        #expect(message.contains(" - HEADERS:"))
+        #expect(message.contains("Accept: application/json"))
+        #expect(message.contains("Content-Type: application/json"))
+    }
+
+    @Test("Given a verbose POST request with custom headers, when fetch is called, then request log includes merged headers")
+    func requestLogIncludesMergedHeadersForPost() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+
+        MockURLProtocol.respond(path: "/post-merged-headers") { _ in }
+
+        let request = Request.testRequest(
+            method: .post,
+            baseUrl: "https://example.com",
+            endpoint: "/post-merged-headers",
+            headers: ["Authorization": "Bearer 123", "X-Client": "iOS"],
+            bodyParams: ["name": "Taylor"],
+            verbose: true,
+            networkLogManager: spy
+        )
+
+        // When
+        _ = await withCheckedContinuation { continuation in
+            request.fetch { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        // Then
+        let message = try #require(spy.messages.first)
+
+        #expect(message.contains(" - HEADERS:"))
+        #expect(message.contains("Accept: application/json"))
+        #expect(message.contains("Content-Type: application/json"))
+        #expect(message.contains("Authorization: Bearer 123"))
+        #expect(message.contains("X-Client: iOS"))
+    }
+
+    @Test("Given a verbose POST request with custom Accept and Content-Type headers, when fetch is called, then request log includes overridden headers")
+    func requestLogIncludesOverriddenHeadersForPost() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+
+        MockURLProtocol.respond(path: "/post-overridden-headers") { _ in }
+
+        let request = Request.testRequest(
+            method: .post,
+            baseUrl: "https://example.com",
+            endpoint: "/post-overridden-headers",
+            headers: ["Accept": "text/plain", "Content-Type": "application/custom"],
+            bodyParams: ["name": "Taylor"],
+            verbose: true,
+            networkLogManager: spy
+        )
+
+        // When
+        _ = await withCheckedContinuation { continuation in
+            request.fetch { _ in
+                continuation.resume(returning: ())
+            }
+        }
+
+        // Then
+        let message = try #require(spy.messages.first)
+
+        #expect(message.contains(" - HEADERS:"))
+        #expect(message.contains("Accept: text/plain"))
+        #expect(message.contains("Content-Type: application/custom"))
+        #expect(message.contains("Accept: application/json") == false)
+        #expect(message.contains("Content-Type: application/json") == false)
+    }
+
+    @Test("Given verbose requests with and without headers, when fetch is called, then log includes default and custom headers")
+    func requestLogIncludesDefaultAndCustomHeaders() async throws {
         // Given
         let spyWithHeaders = NetworkLogManagerSpy()
         let spyWithoutHeaders = NetworkLogManagerSpy()
@@ -535,7 +663,9 @@ struct RequestTests {
 
         #expect(messageWithHeaders.contains(" - HEADERS:"))
         #expect(messageWithHeaders.contains("Authorization: Bearer 123"))
-        #expect(messageWithoutHeaders.contains(" - HEADERS:") == false)
+        #expect(messageWithHeaders.contains("Accept: application/json"))
+        #expect(messageWithoutHeaders.contains(" - HEADERS:"))
+        #expect(messageWithoutHeaders.contains("Accept: application/json"))
     }
 
     @Test("Given verbose request with body params array, when fetch is called, then request log includes JSON array body")
