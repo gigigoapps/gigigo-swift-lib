@@ -9,7 +9,6 @@
 import Foundation
 import UIKit
 
-@available(iOS 8.0, *)
 open class AlertController: NSObject, AlertInterface {
     
     var alert: UIAlertController

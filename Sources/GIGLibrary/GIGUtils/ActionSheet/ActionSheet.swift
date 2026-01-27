@@ -8,7 +8,6 @@
 
 import UIKit
 
-@available(iOS 8.0, *)
 open class ActionSheet: AlertController {
     
     public override init(title: String, message: String) {

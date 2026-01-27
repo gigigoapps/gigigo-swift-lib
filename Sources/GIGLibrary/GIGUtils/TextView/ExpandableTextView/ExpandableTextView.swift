@@ -8,7 +8,6 @@
 
 import UIKit
 
-@available(iOS 9.0, *)
 open class ExpandableTextView: UIView {
     
     // MARK: IBOutlet
