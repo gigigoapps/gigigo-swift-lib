@@ -24,4 +24,3 @@ dependencies: [
 	- SwiftNetwork: Swift classes to manage gigigo's requestst. Standard Gigigo JSON is parsed by default.
 	- GIGUtils: a lot of extensions on foundation classes.
 	- GIGScanner: QR scanner using native iOS API
-	- ProgressPageControl: A page control with a progress bar in the selected page.
