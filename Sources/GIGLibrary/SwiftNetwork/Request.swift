@@ -334,6 +334,9 @@ public class Request: Selfie {
 		var request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: self.timeout)
 		request.httpMethod = self.method.rawValue
 		request.allHTTPHeaderFields = self.headers
+        if request.allHTTPHeaderFields?.keys.contains("Accept") != true {
+            request.addValue("application/json", forHTTPHeaderField: "Accept")
+        }
 		
 		// Set body is not GET
 		if self.method != .get {
