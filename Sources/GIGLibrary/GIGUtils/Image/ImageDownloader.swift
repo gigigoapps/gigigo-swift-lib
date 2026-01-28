@@ -60,36 +60,42 @@ struct ImageDownloader {
         }
         let requestedBaseURL = request.baseURL
         request.fetch { response in
-            switch response.status {
-            case .success:
-                guard let image = try? response.image() else {
-                    LogWarn("While downloading the image, the body was empty or the image type was not recognized.")
-                    self.downloadNext()
-                    return
-                }
-                let width = view.width() * UIScreen.main.scale
-                let height = view.height() * UIScreen.main.scale
-                DispatchQueue(label: "com.gigigo.imagedownloader", qos: .background).async {
-                    var finalImage = image
-                    if let resized = image.imageProportionally(with: CGSize(width: width, height: height)) {
-                        finalImage = resized
-                    }
-                    Task { @MainActor in
-                        if let currentRequest = ImageDownloader.queue[view], requestedBaseURL == currentRequest.baseURL {
-                            self.setAnimated(image: finalImage, in: view)
-                        }
-                        if let index = ImageDownloader.queue.index(forKey: view) {
-                            ImageDownloader.queue.remove(at: index)
-                            ImageDownloader.images.updateValue(finalImage, forKey: requestedBaseURL)
-                        }
-                        self.downloadNext()
-                    }
-                }
-            default:
-                LogError(response.error)
-                self.downloadNext()
-                
+            Task { @MainActor in
+                self.handleResponse(response, view: view, requestedBaseURL: requestedBaseURL)
             }
+        }
+    }
+
+    private func handleResponse(_ response: Response, view: UIImageView, requestedBaseURL: String) {
+        switch response.status {
+        case .success:
+            guard let image = try? response.image() else {
+                LogWarn("While downloading the image, the body was empty or the image type was not recognized.")
+                self.downloadNext()
+                return
+            }
+            let width = view.width() * UIScreen.main.scale
+            let height = view.height() * UIScreen.main.scale
+            let targetSize = CGSize(width: width, height: height)
+            Task.detached(priority: .background) {
+                var finalImage = image
+                if let resized = image.imageProportionally(with: targetSize) {
+                    finalImage = resized
+                }
+                await MainActor.run {
+                    if let currentRequest = ImageDownloader.queue[view], requestedBaseURL == currentRequest.baseURL {
+                        self.setAnimated(image: finalImage, in: view)
+                    }
+                    if let index = ImageDownloader.queue.index(forKey: view) {
+                        ImageDownloader.queue.remove(at: index)
+                        ImageDownloader.images.updateValue(finalImage, forKey: requestedBaseURL)
+                    }
+                    self.downloadNext()
+                }
+            }
+        default:
+            LogError(response.error)
+            self.downloadNext()
         }
     }
     
