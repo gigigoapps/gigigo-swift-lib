@@ -8,7 +8,7 @@
 
 import Foundation
 
-public struct KeychainAuthenticationPolicy: OptionSet {
+public struct KeychainAuthenticationPolicy: OptionSet, Sendable {
     /**
      User presence policy using Touch ID or Passcode. Touch ID does not
      have to be available or enrolled. Item is still accessible by Touch ID

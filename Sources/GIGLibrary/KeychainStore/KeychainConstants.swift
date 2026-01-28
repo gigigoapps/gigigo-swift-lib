@@ -29,12 +29,12 @@ struct KeychainConstants {
     static let AttributeAccount = String(kSecAttrAccount)
     static let AttributeService = String(kSecAttrService)
     static let AttributeGeneric = String(kSecAttrGeneric)
-    static let SynchronizableAny = kSecAttrSynchronizableAny
+    static let SynchronizableAny = String(kSecAttrSynchronizableAny)
 
     /** Search Constants */
     static let MatchLimit = String(kSecMatchLimit)
-    static let MatchLimitOne = kSecMatchLimitOne
-    static let MatchLimitAll = kSecMatchLimitAll
+    static let MatchLimitOne = String(kSecMatchLimitOne)
+    static let MatchLimitAll = String(kSecMatchLimitAll)
 
     /** Return Type Key Constants */
     static let ReturnData = String(kSecReturnData)
@@ -51,5 +51,4 @@ struct KeychainConstants {
 
     static let UseAuthenticationUI = String(kSecUseAuthenticationUI)
     static let UseAuthenticationContext = String(kSecUseAuthenticationContext)
-    static let UseAuthenticationUIFail = String(kSecUseAuthenticationUIFail)
 }

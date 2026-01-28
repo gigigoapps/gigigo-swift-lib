@@ -10,7 +10,7 @@ final class MockURLProtocol: URLProtocol {
     }
 
     private static let handlerQueue = DispatchQueue(label: "MockURLProtocol.handlers")
-    private static var handlers: [RouteHandler] = []
+    private nonisolated(unsafe) static var handlers: [RouteHandler] = []
 
     override class func canInit(with request: URLRequest) -> Bool {
         return true

@@ -23,7 +23,7 @@ public protocol ReachabilityInput {
     func isReachableViaWiFi() -> Bool
 }
 
-public class ReachabilityWrapper: ReachabilityInput {
+public class ReachabilityWrapper: ReachabilityInput, @unchecked Sendable {
     // MARK: Singleton
     public static let shared = ReachabilityWrapper()
     

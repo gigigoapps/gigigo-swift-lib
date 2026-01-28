@@ -8,6 +8,7 @@
 
 import UIKit
 
+@MainActor
 public protocol KeyboardAdaptable {
 	
 	func keyboardWillShow()
@@ -122,6 +123,7 @@ public extension KeyboardAdaptable where Self: UIViewController {
 }
 
 
+@MainActor
 class Keyboard {
 	
 	fileprivate static var observers: [AnyObject] = []

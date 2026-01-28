@@ -202,6 +202,11 @@ open class KeychainStore {
     }
 
     // MARK: Setters
+    private func interactionNotAllowedContext() -> LAContext {
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        return context
+    }
 
     public func set(_ value: String, key: String, ignoringAttributeSynchronizable: Bool = true) throws {
         guard let data = value.data(using: .utf8, allowLossyConversion: false) else { throw Status.conversionError }
@@ -211,7 +216,7 @@ open class KeychainStore {
     public func set(_ value: Data, key: String, ignoringAttributeSynchronizable: Bool = true) throws {
         var query = self.options.query(ignoringAttributeSynchronizable: ignoringAttributeSynchronizable)
         query[KeychainConstants.AttributeAccount] = key
-        query[KeychainConstants.UseAuthenticationUI] = KeychainConstants.UseAuthenticationUIFail
+        query[KeychainConstants.UseAuthenticationContext] = interactionNotAllowedContext()
 
         var status = SecItemCopyMatching(query as CFDictionary, nil)
         switch status {
@@ -313,7 +318,7 @@ open class KeychainStore {
         query[KeychainConstants.AttributeAccount] = key
 
         if withoutAuthenticationUI {
-            query[KeychainConstants.UseAuthenticationUI] = KeychainConstants.UseAuthenticationUIFail
+            query[KeychainConstants.UseAuthenticationContext] = interactionNotAllowedContext()
         }
         
         let status = SecItemCopyMatching(query as CFDictionary, nil)
