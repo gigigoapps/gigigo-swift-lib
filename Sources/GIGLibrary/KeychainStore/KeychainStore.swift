@@ -46,7 +46,6 @@ open class KeychainStore {
         return self.options.authenticationPrompt
     }
 
-    @available(iOS 9.0, *)
     public var authenticationContext: LAContext? {
         return self.options.authenticationContext as? LAContext
     }
@@ -134,7 +133,6 @@ open class KeychainStore {
         return KeychainStore(options)
     }
 
-    @available(iOS 9.0, *)
     public func authenticationContext(_ authenticationContext: LAContext) -> KeychainStore {
         var options = self.options
         options.authenticationContext = authenticationContext
