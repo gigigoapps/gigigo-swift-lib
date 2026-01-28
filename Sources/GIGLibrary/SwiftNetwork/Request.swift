@@ -64,6 +64,31 @@ public class Request: Selfie, @unchecked Sendable {
     private let session: URLSession?
 
     public typealias CompletionHandler = @MainActor @Sendable (Response) -> Void
+
+    // Async APIs return Response and never throw; callers should inspect Response.status and Response.error.
+    public func fetch() async -> Response {
+        await withCheckedContinuation { continuation in
+            fetch { response in
+                continuation.resume(returning: response)
+            }
+        }
+    }
+
+    public func fetch(downloadTo fileURL: URL) async -> Response {
+        await withCheckedContinuation { continuation in
+            fetch(withDownloadUrlFile: fileURL) { response in
+                continuation.resume(returning: response)
+            }
+        }
+    }
+
+    public func upload(files: [FileUploadData], params: [String: Any]) async -> Response {
+        await withCheckedContinuation { continuation in
+            upload(files: files, params: params) { response in
+                continuation.resume(returning: response)
+            }
+        }
+    }
     
     public convenience init(
         method: HTTPMethod = .get,
@@ -161,7 +186,12 @@ public class Request: Selfie, @unchecked Sendable {
     }
     
     public func fetch(completionHandler: @escaping CompletionHandler) {
-		guard let request = self.buildRequest() else { return }
+		guard let request = self.buildRequest() else {
+            Task { @MainActor in
+                completionHandler(self.invalidRequestResponse(standardType: self.standardType))
+            }
+            return
+        }
         guard self.reachability.isReachable() else {
             let response = Response.noInternet()
             Task { @MainActor in
@@ -196,7 +226,12 @@ public class Request: Selfie, @unchecked Sendable {
 	}
     
     public func fetch(withDownloadUrlFile: URL, completionHandler: @escaping CompletionHandler) {
-        guard let request = self.buildRequest() else { return }
+        guard let request = self.buildRequest() else {
+            Task { @MainActor in
+                completionHandler(self.invalidRequestResponse(standardType: .basic))
+            }
+            return
+        }
         guard self.reachability.isReachable() else {
             let response = Response.noInternet()
             Task { @MainActor in
@@ -256,7 +291,12 @@ public class Request: Selfie, @unchecked Sendable {
     */
     public func upload(files: [FileUploadData], params: [String: Any], completionHandler: @escaping CompletionHandler) {
         
-        guard var request = self.buildRequest(), let boundary = self.generateBoundary() else { return }
+        guard var request = self.buildRequest(), let boundary = self.generateBoundary() else {
+            Task { @MainActor in
+                completionHandler(self.invalidRequestResponse(standardType: self.standardType))
+            }
+            return
+        }
         guard self.reachability.isReachable() else {
             let response = Response.noInternet()
             Task { @MainActor in
@@ -320,6 +360,11 @@ public class Request: Selfie, @unchecked Sendable {
             self.controlCache(config: configuration)
         }
         return URLSession(configuration: configuration, delegate: self as? URLSessionDelegate, delegateQueue: nil)
+    }
+
+    private func invalidRequestResponse(standardType: StandardType) -> Response {
+        let error = URLError(.badURL)
+        return Response(data: nil, response: nil, error: error, standardType: standardType, networkLogManager: self.networkLogManager)
     }
 	
 	fileprivate func buildRequest() -> URLRequest? {
