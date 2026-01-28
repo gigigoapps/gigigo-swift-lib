@@ -8,6 +8,7 @@
 
 import UIKit
 
+@MainActor
 protocol AlertInterface {
     func show()
     func addDefaultButton(_ title: String, usingAction: ((String) -> Void)?)
@@ -15,6 +16,7 @@ protocol AlertInterface {
     func addDestructiveButton(_ title: String, usingAction: ((String) -> Void)?)
 }
 
+@MainActor
 open class Alert: NSObject {
     
     internal var interface: AlertInterface!

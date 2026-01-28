@@ -40,7 +40,7 @@ public struct FileUploadData {
     }
 }
 
-public class Request: Selfie {
+public class Request: Selfie, @unchecked Sendable {
 	
     public var method: HTTPMethod
     public var baseURL: String
@@ -62,6 +62,8 @@ public class Request: Selfie {
     private let reachability: ReachabilityInput
     private let sessionConfiguration: URLSessionConfiguration?
     private let session: URLSession?
+
+    public typealias CompletionHandler = @MainActor @Sendable (Response) -> Void
     
     public convenience init(
         method: HTTPMethod = .get,
@@ -158,11 +160,13 @@ public class Request: Selfie {
         self.endpoint = endpoint
     }
     
-    public func fetch(completionHandler: @escaping (Response) -> Void) {
+    public func fetch(completionHandler: @escaping CompletionHandler) {
 		guard let request = self.buildRequest() else { return }
         guard self.reachability.isReachable() else {
             let response = Response.noInternet()
-            completionHandler(response)
+            Task { @MainActor in
+                completionHandler(response)
+            }
             return
         }
 		self.request = request
@@ -183,19 +187,21 @@ public class Request: Selfie {
 				response.logResponse(self.logInfo)
 			}
 			
-			DispatchQueue.main.async {
-				completionHandler(response)
-			}
+            Task { @MainActor in
+                completionHandler(response)
+            }
 		}
 		
 		self.task?.resume()
 	}
     
-    public func fetch(withDownloadUrlFile: URL, completionHandler: @escaping (Response) -> Void) {
+    public func fetch(withDownloadUrlFile: URL, completionHandler: @escaping CompletionHandler) {
         guard let request = self.buildRequest() else { return }
         guard self.reachability.isReachable() else {
             let response = Response.noInternet()
-            completionHandler(response)
+            Task { @MainActor in
+                completionHandler(response)
+            }
             return
         }
         self.request = request
@@ -207,7 +213,9 @@ public class Request: Selfie {
         self.task = session.downloadTask(with: request) { location, response, error in
             guard let location = location else {
                 LogWarn("Location of file is nil")
-                completionHandler(Response(data: nil, response: nil, error: ErrorInstantiation.instantiateIntial))
+                Task { @MainActor in
+                    completionHandler(Response(data: nil, response: nil, error: ErrorInstantiation.instantiateIntial))
+                }
                 return
             }
             
@@ -227,7 +235,7 @@ public class Request: Selfie {
                 response.logResponse(self.logInfo)
             }
             
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 completionHandler(response)
             }
         }
@@ -246,12 +254,14 @@ public class Request: Selfie {
     - Author: Jerilyn Gonçalves
     - Since: 3.4.8
     */
-    public func upload(files: [FileUploadData], params: [String: Any], completionHandler: @escaping (Response) -> Void) {
+    public func upload(files: [FileUploadData], params: [String: Any], completionHandler: @escaping CompletionHandler) {
         
         guard var request = self.buildRequest(), let boundary = self.generateBoundary() else { return }
         guard self.reachability.isReachable() else {
             let response = Response.noInternet()
-            completionHandler(response)
+            Task { @MainActor in
+                completionHandler(response)
+            }
             return
         }
         
@@ -273,7 +283,7 @@ public class Request: Selfie {
                 response.logResponse(self.logInfo)
             }
             
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 completionHandler(response)
             }
         })

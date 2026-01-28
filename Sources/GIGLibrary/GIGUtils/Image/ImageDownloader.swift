@@ -8,6 +8,7 @@
 
 import UIKit
 
+@MainActor
 struct ImageDownloader {
     
     static let shared = ImageDownloader()
@@ -17,10 +18,12 @@ struct ImageDownloader {
     
     
     private init() {
-        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: nil) { _ in
-            ImageDownloader.images = [:]
-            ImageDownloader.stack = []
-            ImageDownloader.queue = [:]
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { _ in
+            Task { @MainActor in
+                ImageDownloader.images = [:]
+                ImageDownloader.stack = []
+                ImageDownloader.queue = [:]
+            }
         }
     }
     
@@ -32,13 +35,9 @@ struct ImageDownloader {
             ImageDownloader.queue.removeValue(forKey: view)
         }
         if let image = ImageDownloader.images[url] {
-            DispatchQueue.main.async {
-                view.image = image
-            }
+            view.image = image
         } else {
-            DispatchQueue.main.async {
-                view.image = placeholder
-            }
+            view.image = placeholder
             self.loadImage(url: url, in: view)
         }
     }
@@ -59,31 +58,32 @@ struct ImageDownloader {
         guard let request = ImageDownloader.queue[view] else {
             return
         }
+        let requestedBaseURL = request.baseURL
         request.fetch { response in
             switch response.status {
             case .success:
-                if let image = try? response.image() {
-                    let width = view.width() * UIScreen.main.scale
-                    let height = view.height() * UIScreen.main.scale
-                    DispatchQueue(label: "com.gigigo.imagedownloader", qos: .background).async {
-                        var finalImage = image
-                        if let resized = image.imageProportionally(with: CGSize(width: width, height: height)) {
-                            finalImage = resized
-                        }
-                        DispatchQueue.main.async {
-                            if let currentRequest = ImageDownloader.queue[view], request.baseURL == currentRequest.baseURL {
-                                self.setAnimated(image: finalImage, in: view)
-                            }
-                            if let index = ImageDownloader.queue.index(forKey: view) {
-                                ImageDownloader.queue.remove(at: index)
-                                ImageDownloader.images.updateValue(finalImage, forKey: request.baseURL)
-                            }
-                            self.downloadNext()
-                        }
-                    }
-                } else {
-                    LogWarn("Al descargar la imagen,o se ha recibido un body vacio o no se se ha reconocido el tipo de imagen que es.")
+                guard let image = try? response.image() else {
+                    LogWarn("While downloading the image, the body was empty or the image type was not recognized.")
                     self.downloadNext()
+                    return
+                }
+                let width = view.width() * UIScreen.main.scale
+                let height = view.height() * UIScreen.main.scale
+                DispatchQueue(label: "com.gigigo.imagedownloader", qos: .background).async {
+                    var finalImage = image
+                    if let resized = image.imageProportionally(with: CGSize(width: width, height: height)) {
+                        finalImage = resized
+                    }
+                    Task { @MainActor in
+                        if let currentRequest = ImageDownloader.queue[view], requestedBaseURL == currentRequest.baseURL {
+                            self.setAnimated(image: finalImage, in: view)
+                        }
+                        if let index = ImageDownloader.queue.index(forKey: view) {
+                            ImageDownloader.queue.remove(at: index)
+                            ImageDownloader.images.updateValue(finalImage, forKey: requestedBaseURL)
+                        }
+                        self.downloadNext()
+                    }
                 }
             default:
                 LogError(response.error)

@@ -1,6 +1,7 @@
 import XCTest
 import GIGLibrary
 
+@MainActor
 class StylableTests: XCTestCase {
 
     override func setUp() {

@@ -9,6 +9,7 @@
 import Foundation
 import UIKit
 
+@MainActor
 open class AlertController: NSObject, AlertInterface {
     
     var alert: UIAlertController

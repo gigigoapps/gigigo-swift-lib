@@ -14,7 +14,7 @@ public protocol GIGScannerOutput {
 	func didSuccessfullyScan(_ scannedValue: String, type: String)
 }
 
-open class GIGScannerVC: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
+open class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOutputObjectsDelegate {
 	
 	open var scannerOutput: GIGScannerOutput?
 	var captureSession: AVCaptureSession?

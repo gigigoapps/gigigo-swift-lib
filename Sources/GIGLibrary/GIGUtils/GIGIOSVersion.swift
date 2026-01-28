@@ -9,8 +9,8 @@
 import Foundation
 import UIKit
 
-let Device = UIDevice.current
-let iosVersion = NSString(string: Device.systemVersion).doubleValue
+@MainActor let Device = UIDevice.current
+@MainActor let iosVersion = NSString(string: Device.systemVersion).doubleValue
 
-let MAJORTHANIOS8 = (iosVersion > 8.0)
-let iOS7 = (iosVersion < 8)
+@MainActor let MAJORTHANIOS8 = (iosVersion > 8.0)
+@MainActor let iOS7 = (iosVersion < 8)

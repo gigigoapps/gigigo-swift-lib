@@ -59,7 +59,7 @@ public class LogManagerSettings {
     }
 }
 
-public class LogManager {
+public class LogManager: @unchecked Sendable {
     public static let shared = LogManager()
     public var defaultSettings: LogManagerSettings
     

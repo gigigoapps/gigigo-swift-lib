@@ -50,10 +50,10 @@ func callback(reachability: SCNetworkReachability, flags: SCNetworkReachabilityF
     reachability.reachabilityChanged()
 }
 
-public class Reachability {
+public class Reachability: @unchecked Sendable {
 
-    public typealias NetworkReachable = (Reachability) -> Void
-    public typealias NetworkUnreachable = (Reachability) -> Void
+    public typealias NetworkReachable = @Sendable (Reachability) -> Void
+    public typealias NetworkUnreachable = @Sendable (Reachability) -> Void
 
     @available(*, unavailable, renamed: "Conection")
     public enum NetworkStatus: CustomStringConvertible {

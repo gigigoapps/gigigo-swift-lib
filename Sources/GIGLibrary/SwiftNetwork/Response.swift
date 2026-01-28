@@ -25,7 +25,7 @@ public enum ResponseStatus {
 	case untrustedCertificate
 }
 
-public class Response: Selfie {
+public class Response: Selfie, @unchecked Sendable {
 	
 	public var status: ResponseStatus
 	public var statusCode: Int
@@ -175,6 +175,7 @@ public extension Response {
 		return json
 	}
 	
+    @MainActor
     func image() throws -> UIImage {
 		guard let imageData = self.body else {
 			throw ResponseError.bodyNil
