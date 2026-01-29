@@ -27,6 +27,7 @@
 - Document non-obvious decisions with brief, precise comments.
 
 ## Workflow (tests, commits/PRs)
-- Run relevant tests before finishing changes.
+- Run relevant tests before finishing changes. 
+- Run tests validations only on macOS environments
 - Create atomic commits with clear, descriptive messages.
 - Open PRs with a concise summary and sufficient context.
