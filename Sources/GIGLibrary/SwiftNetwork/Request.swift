@@ -119,10 +119,51 @@ public class Request: Selfie, @unchecked Sendable {
     }
 
     public func upload(files: [FileUploadData], params: [String: Any]) async -> Response {
-        await withCheckedContinuation { continuation in
-            upload(files: files, params: params) { response in
-                continuation.resume(returning: response)
-            }
+        guard var request = self.buildRequest(), let boundary = self.generateBoundary() else {
+            return Response.invalidURL()
+        }
+        guard self.reachability.isReachable() else {
+            return Response.noInternet()
+        }
+
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        let bodyData = self.buildUploadData(files: files, params: params, boundary: boundary)
+        var requestForLog = request
+        requestForLog.httpBody = bodyData
+        self.request = requestForLog
+        self.logRequest()
+        self.cancel()
+
+        let session = self.configuredSession(applyCache: false)
+        defer {
+            session.finishTasksAndInvalidate()
+        }
+
+        if Task.isCancelled {
+            self.logRequestError(message: "Request cancelled before execution.")
+            return Response.cancelled()
+        }
+
+        do {
+            let (data, urlResponse) = try await session.upload(for: request, from: bodyData)
+            let response = Response(
+                successData: data,
+                response: urlResponse,
+                standardType: self.standardType,
+                networkLogManager: self.networkLogManager
+            )
+            self.logIfVerbose(response)
+            return response
+        } catch is CancellationError {
+            self.logRequestError(message: "Request cancelled during execution.")
+            return Response.cancelled()
+        } catch {
+            self.logRequestError(message: error.localizedDescription)
+            return Response(
+                error: error,
+                standardType: self.standardType,
+                networkLogManager: self.networkLogManager
+            )
         }
     }
     
