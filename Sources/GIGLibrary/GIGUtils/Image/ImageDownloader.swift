@@ -59,10 +59,9 @@ struct ImageDownloader {
             return
         }
         let requestedBaseURL = request.baseURL
-        request.fetch { response in
-            Task { @MainActor in
-                self.handleResponse(response, view: view, requestedBaseURL: requestedBaseURL)
-            }
+        Task { @MainActor in
+            let response = await request.fetch()
+            self.handleResponse(response, view: view, requestedBaseURL: requestedBaseURL)
         }
     }
 
