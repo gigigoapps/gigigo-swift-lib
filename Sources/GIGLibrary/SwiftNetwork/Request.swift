@@ -111,10 +111,50 @@ public class Request: Selfie, @unchecked Sendable {
     }
 
     public func fetch(downloadTo fileURL: URL) async -> Response {
-        await withCheckedContinuation { continuation in
-            fetch(withDownloadUrlFile: fileURL) { response in
-                continuation.resume(returning: response)
-            }
+        guard let request = self.buildRequest() else {
+            return Response.invalidURL()
+        }
+        guard self.reachability.isReachable() else {
+            return Response.noInternet()
+        }
+        self.request = request
+        self.logRequest()
+        self.cancel()
+
+        let session = self.configuredSession(applyCache: false)
+        defer {
+            session.finishTasksAndInvalidate()
+        }
+
+        if Task.isCancelled {
+            self.logRequestError(message: "Request cancelled before execution.")
+            return Response.cancelled()
+        }
+
+        do {
+            let (location, urlResponse) = try await session.download(for: request)
+            let response = Response(
+                successData: nil,
+                response: urlResponse,
+                standardType: .basic,
+                networkLogManager: self.networkLogManager
+            )
+
+            try self.replaceDownloadedFile(at: location, destination: fileURL)
+            response.statusCode = 200
+
+            self.logIfVerbose(response)
+            return response
+        } catch is CancellationError {
+            self.logRequestError(message: "Request cancelled during execution.")
+            return Response.cancelled()
+        } catch {
+            self.logRequestError(message: error.localizedDescription)
+            return Response(
+                error: error,
+                standardType: .basic,
+                networkLogManager: self.networkLogManager
+            )
         }
     }
 
@@ -407,6 +447,13 @@ public class Request: Selfie, @unchecked Sendable {
     private func logRequestError(message: String) {
         guard self.verbose else { return }
         self.networkLogManager.log(message, info: self.logInfo)
+    }
+
+    private func replaceDownloadedFile(at sourceURL: URL, destination destinationURL: URL) throws {
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            try FileManager.default.removeItem(at: destinationURL)
+        }
+        try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
     }
 	
 	fileprivate func buildRequest() -> URLRequest? {
