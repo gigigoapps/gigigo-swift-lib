@@ -19,7 +19,10 @@ public protocol KeyboardAdaptable {
     func keyboardChangeFrame(_ size: CGSize)
 }
 
+typealias KeyboardEventContext = Keyboard.KeyboardEventContext
 
+
+@MainActor
 public extension KeyboardAdaptable where Self: UIViewController {
 	
 	// MARK: - Public Methods
@@ -47,66 +50,68 @@ public extension KeyboardAdaptable where Self: UIViewController {
 	// MARK: - Private Helpers
     
     fileprivate func manageKeyboardChangeFrameEvent() {
-        Keyboard.willChange { notification in
-            guard let size = Keyboard.size(notification) else {
+        Keyboard.willChange { context in
+            guard let size = context.size else {
                 return LogWarn("Couldn't get keyboard size")
             }
-            
+
             self.keyboardChangeFrame(size)
         }
     }
 	
 	fileprivate func manageKeyboardShowEvent() {
-		Keyboard.willShow { notification in
-			self.keyboardWillShow()
-            guard let size = Keyboard.size(notification) else {
+		Keyboard.willShow { context in
+            guard let size = context.size else {
                 return LogWarn("Couldn't get keyboard size")
             }
-			self.animateKeyboardChanges(notification,
-				changes: {
-					if let window = UIApplication.shared.activeWindow {
+
+            self.keyboardWillShow()
+            self.animateKeyboardChanges(
+                duration: context.duration,
+                curve: context.curve,
+                changes: {
+                    if let window = UIApplication.shared.activeWindow {
                         var appHeight = window.frame.height
                         if self.navigationController != nil {
                             appHeight -= self.navigationController?.navigationBar.frame.size.height ?? 0
                         }
                         let safeAreaInsetsBottomHeight = window.safeAreaInsets.bottom
                         let safeAreaInsetsTopHeight = window.safeAreaInsets.top
-                        let statusBarHeight = UIApplication.shared.statusBarFrame.size.height
+                        let statusBarHeight = window.windowScene?.statusBarManager?.statusBarFrame.height ?? 0
                         self.view.frame.size.height = appHeight - safeAreaInsetsBottomHeight + safeAreaInsetsTopHeight - statusBarHeight - size.height
                     }
-				},
-				onCompletion: {
-					self.keyboardDidShow()
-				}
-			)
+                },
+                onCompletion: {
+                    self.keyboardDidShow()
+                }
+            )
 		}
 	}
 	
 	fileprivate func manageKeyboardHideEvent() {
-		Keyboard.willHide { notification in
-			self.keyboardWillHide()
-			self.animateKeyboardChanges(notification,
-				changes: {
-					if let window = UIApplication.shared.activeWindow {
+		Keyboard.willHide { context in
+            self.keyboardWillHide()
+            self.animateKeyboardChanges(
+                duration: context.duration,
+                curve: context.curve,
+                changes: {
+                    if let window = UIApplication.shared.activeWindow {
                         var appHeight = window.frame.height
                         if self.navigationController != nil {
                             appHeight -= self.navigationController?.navigationBar.frame.size.height ?? 0
                         }
-                        let statusBarHeight = UIApplication.shared.statusBarFrame.size.height
-						self.view.frame.size.height = appHeight - statusBarHeight
+                        let statusBarHeight = window.windowScene?.statusBarManager?.statusBarFrame.height ?? 0
+                        self.view.frame.size.height = appHeight - statusBarHeight
                     }
-				},
-				onCompletion: {
-					self.keyboardDidHide()
-				}
-			)
+                },
+                onCompletion: {
+                    self.keyboardDidHide()
+                }
+            )
 		}
 	}
 	
-	fileprivate func animateKeyboardChanges(_ notification: Notification, changes: @escaping () -> Void, onCompletion: @escaping () -> Void) {
-		let duration = Keyboard.animationDuration(notification)
-		let curve = Keyboard.animationCurve(notification)
-		
+	fileprivate func animateKeyboardChanges(duration: TimeInterval, curve: UIView.AnimationOptions, changes: @escaping () -> Void, onCompletion: @escaping () -> Void) {
 		UIView.animate(
 			withDuration: duration,
 			delay: 0,
@@ -125,6 +130,12 @@ public extension KeyboardAdaptable where Self: UIViewController {
 
 @MainActor
 class Keyboard {
+
+    struct KeyboardEventContext {
+        let size: CGSize?
+        let duration: TimeInterval
+        let curve: UIView.AnimationOptions
+    }
 	
 	fileprivate static var observers: [AnyObject] = []
 	
@@ -136,23 +147,23 @@ class Keyboard {
 		self.observers.removeAll()
 	}
 	
-	class func willShow(_ notificationHandler: @escaping (Notification) -> Void) {
+	class func willShow(_ notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) {
 		self.keyboardEvent(UIResponder.keyboardWillShowNotification.rawValue, notificationHandler: notificationHandler)
 	}
 	
-	class func didShow(_ notificationHandler: @escaping (Notification) -> Void) {
+	class func didShow(_ notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) {
 		self.keyboardEvent(UIResponder.keyboardDidShowNotification.rawValue, notificationHandler: notificationHandler)
 	}
 	
-	class func willHide(_ notificationHandler: @escaping (Notification) -> Void) {
+	class func willHide(_ notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) {
 		self.keyboardEvent(UIResponder.keyboardWillHideNotification.rawValue, notificationHandler: notificationHandler)
 	}
-    
-    class func willChange(_ notificationHandler: @escaping (Notification) -> Void) {
+
+    class func willChange(_ notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) {
         self.keyboardEvent(UIResponder.keyboardWillChangeFrameNotification.rawValue, notificationHandler: notificationHandler)
     }
 	
-	class func size(_ notification: Notification) -> CGSize? {
+    nonisolated class func size(_ notification: Notification) -> CGSize? {
 		guard
 			let info = (notification as NSNotification).userInfo,
 			let frame = info[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue
@@ -161,7 +172,7 @@ class Keyboard {
 		return frame.cgRectValue.size
 	}
 	
-	class func animationDuration(_ notification: Notification) -> TimeInterval {
+	nonisolated class func animationDuration(_ notification: Notification) -> TimeInterval {
 		guard
 			let info = (notification as NSNotification).userInfo,
 			let value = info[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber
@@ -173,7 +184,7 @@ class Keyboard {
 		return value.doubleValue
 	}
 	
-    class func animationCurve(_ notification: Notification) -> UIView.AnimationOptions {
+    nonisolated class func animationCurve(_ notification: Notification) -> UIView.AnimationOptions {
 		guard
 			let info = (notification as NSNotification).userInfo,
             let curveInt = info[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int,
@@ -189,13 +200,22 @@ class Keyboard {
 	
 	// MARK: - Private Helpers
 	
-	fileprivate class func keyboardEvent(_ event: String, notificationHandler: @escaping (Notification) -> Void) {
+	fileprivate class func keyboardEvent(_ event: String, notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) {
 		let observer = NotificationCenter.default
 			.addObserver(
 				forName: NSNotification.Name(rawValue: event),
 				object: nil,
 				queue: OperationQueue.main,
-				using: notificationHandler
+				using: { notification in
+                    let context = KeyboardEventContext(
+                        size: Keyboard.size(notification),
+                        duration: Keyboard.animationDuration(notification),
+                        curve: Keyboard.animationCurve(notification)
+                    )
+                    MainActor.assumeIsolated {
+                        notificationHandler(context)
+                    }
+                }
 		)
         
 		self.observers.append(observer)

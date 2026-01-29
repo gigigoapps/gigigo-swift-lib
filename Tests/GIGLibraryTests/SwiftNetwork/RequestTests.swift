@@ -23,11 +23,7 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.fetch()
 
         // Then
         let urlRequest = try #require(capturedRequest)
@@ -66,11 +62,7 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.fetch()
 
         // Then
         let urlRequest = try #require(capturedRequest)
@@ -102,11 +94,7 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.fetch()
 
         // Then
         let urlRequest = try #require(capturedRequest)
@@ -131,11 +119,7 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.fetch()
 
         // Then
         let urlRequest = try #require(capturedRequest)
@@ -161,11 +145,7 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.fetch()
 
         // Then
         let urlRequest = try #require(capturedRequest)
@@ -190,11 +170,7 @@ struct RequestTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch()
 
         // Then
         #expect(response.status == .noInternet)
@@ -218,11 +194,7 @@ struct RequestTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch(withDownloadUrlFile: destinationURL) { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch(downloadTo: destinationURL)
 
         // Then
         #expect(response.status == .noInternet)
@@ -249,11 +221,7 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.fetch()
 
         // Then
         let urlRequest = try #require(capturedRequest)
@@ -298,11 +266,7 @@ struct RequestTests {
         ]
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.upload(files: [fileData], params: params) { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.upload(files: [fileData], params: params)
 
         // Then
         let urlRequest = try #require(capturedRequest)
@@ -349,11 +313,7 @@ struct RequestTests {
         ]
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.upload(files: [fileData], params: params) { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.upload(files: [fileData], params: params)
 
         // Then
         #expect(response.status == .noInternet)
@@ -378,11 +338,7 @@ struct RequestTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch(withDownloadUrlFile: destinationURL) { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch(downloadTo: destinationURL)
 
         // Then
         #expect(FileManager.default.fileExists(atPath: destinationURL.path))
@@ -411,11 +367,7 @@ struct RequestTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch(withDownloadUrlFile: destinationURL) { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch(downloadTo: destinationURL)
 
         // Then
         #expect(FileManager.default.fileExists(atPath: destinationURL.path))
@@ -448,11 +400,7 @@ struct RequestTests {
             request.cache = policy
 
             // When
-            _ = await withCheckedContinuation { continuation in
-                request.fetch { _ in
-                    continuation.resume(returning: ())
-                }
-            }
+            _ = await request.fetch()
 
             // Then
             #expect(configuration.requestCachePolicy == policy)
@@ -476,11 +424,7 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.fetch()
 
         // Then
         let message = try #require(spy.messages.first)
@@ -507,11 +451,7 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.fetch()
 
         // Then
         let message = try #require(spy.messages.first)
@@ -538,11 +478,7 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.fetch()
 
         // Then
         let message = try #require(spy.messages.first)
@@ -570,11 +506,7 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.fetch()
 
         // Then
         let message = try #require(spy.messages.first)
@@ -604,11 +536,7 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.fetch()
 
         // Then
         let message = try #require(spy.messages.first)
@@ -645,17 +573,9 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            requestWithHeaders.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await requestWithHeaders.fetch()
 
-        _ = await withCheckedContinuation { continuation in
-            requestWithoutHeaders.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await requestWithoutHeaders.fetch()
 
         // Then
         let messageWithHeaders = try #require(spyWithHeaders.messages.first)
@@ -685,11 +605,7 @@ struct RequestTests {
         )
 
         // When
-        _ = await withCheckedContinuation { continuation in
-            request.fetch { _ in
-                continuation.resume(returning: ())
-            }
-        }
+        _ = await request.fetch()
 
         // Then
         let message = try #require(spy.messages.first)
