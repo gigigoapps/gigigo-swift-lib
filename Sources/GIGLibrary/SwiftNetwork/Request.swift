@@ -67,10 +67,46 @@ public class Request: Selfie, @unchecked Sendable {
 
     // Async APIs return Response and never throw; callers should inspect Response.status and Response.error.
     public func fetch() async -> Response {
-        await withCheckedContinuation { continuation in
-            fetch { response in
-                continuation.resume(returning: response)
-            }
+        guard let request = self.buildRequest() else {
+            return Response.invalidURL()
+        }
+        guard self.reachability.isReachable() else {
+            return Response.noInternet()
+        }
+        self.request = request
+        self.logRequest()
+        self.cancel()
+
+        let session = self.configuredSession(applyCache: true)
+        defer {
+            session.finishTasksAndInvalidate()
+        }
+
+        if Task.isCancelled {
+            self.logRequestError(message: "Request cancelled before execution.")
+            return Response.cancelled()
+        }
+
+        do {
+            let (data, urlResponse) = try await session.data(for: request)
+            let response = Response(
+                successData: data,
+                response: urlResponse,
+                standardType: self.standardType,
+                networkLogManager: self.networkLogManager
+            )
+            self.logIfVerbose(response)
+            return response
+        } catch is CancellationError {
+            self.logRequestError(message: "Request cancelled during execution.")
+            return Response.cancelled()
+        } catch {
+            self.logRequestError(message: error.localizedDescription)
+            return Response(
+                error: error,
+                standardType: self.standardType,
+                networkLogManager: self.networkLogManager
+            )
         }
     }
 
@@ -188,7 +224,7 @@ public class Request: Selfie, @unchecked Sendable {
     public func fetch(completionHandler: @escaping CompletionHandler) {
 		guard let request = self.buildRequest() else {
             Task { @MainActor in
-                completionHandler(self.invalidRequestResponse(standardType: self.standardType))
+                completionHandler(Response.invalidURL())
             }
             return
         }
@@ -228,7 +264,7 @@ public class Request: Selfie, @unchecked Sendable {
     public func fetch(withDownloadUrlFile: URL, completionHandler: @escaping CompletionHandler) {
         guard let request = self.buildRequest() else {
             Task { @MainActor in
-                completionHandler(self.invalidRequestResponse(standardType: .basic))
+                completionHandler(Response.invalidURL())
             }
             return
         }
@@ -293,7 +329,7 @@ public class Request: Selfie, @unchecked Sendable {
         
         guard var request = self.buildRequest(), let boundary = self.generateBoundary() else {
             Task { @MainActor in
-                completionHandler(self.invalidRequestResponse(standardType: self.standardType))
+                completionHandler(Response.invalidURL())
             }
             return
         }
@@ -362,9 +398,15 @@ public class Request: Selfie, @unchecked Sendable {
         return URLSession(configuration: configuration, delegate: self as? URLSessionDelegate, delegateQueue: nil)
     }
 
-    private func invalidRequestResponse(standardType: StandardType) -> Response {
-        let error = URLError(.badURL)
-        return Response(data: nil, response: nil, error: error, standardType: standardType, networkLogManager: self.networkLogManager)
+    private func logIfVerbose(_ response: Response) {
+        if self.verbose {
+            response.logResponse(self.logInfo)
+        }
+    }
+
+    private func logRequestError(message: String) {
+        guard self.verbose else { return }
+        self.networkLogManager.log(message, info: self.logInfo)
     }
 	
 	fileprivate func buildRequest() -> URLRequest? {

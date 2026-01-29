@@ -72,12 +72,32 @@ public class Response: Selfie, @unchecked Sendable {
 			self.status = self.parseError(error: self.error)
 		}
 	}
+
+    convenience init(successData: Data?, response: URLResponse?, standardType: StandardType = .gigigo, networkLogManager: NetworkLogManaging = DefaultNetworkLogManager()) {
+        self.init(data: successData, response: response, error: nil, standardType: standardType, networkLogManager: networkLogManager)
+    }
+
+    convenience init(error: Error?, standardType: StandardType = .gigigo, networkLogManager: NetworkLogManaging = DefaultNetworkLogManager()) {
+        self.init(data: nil, response: nil, error: error, standardType: standardType, networkLogManager: networkLogManager)
+    }
 	
     // MARK: - Instance methods
     
     class func noInternet() -> Response {
         let error = NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet, message: "No Internet")
         let response = Response(data: nil, response: nil, error: error)
+        return response
+    }
+
+    class func invalidURL() -> Response {
+        let error = URLError(.badURL)
+        let response = Response(error: error)
+        return response
+    }
+
+    class func cancelled() -> Response {
+        let error = URLError(.cancelled)
+        let response = Response(error: error)
         return response
     }
 	
