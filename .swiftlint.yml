@@ -16,7 +16,7 @@ type_body_length:
   error: 600
 
 file_length:
-  warning: 600
+  warning: 800
   error: 800
 
 large_tuple:
