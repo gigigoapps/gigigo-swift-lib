@@ -4,14 +4,6 @@ import Testing
 
 @Suite(.serialized)
 struct SwiftNetworkIntegrationTests {
-    private func fetchResponse(for request: Request) async -> Response {
-        await withCheckedContinuation { continuation in
-            request.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
-    }
-
     @Test("Given a request and the success fixture, when fetch is called, then response matches fixture success")
     func fetchReturnsSuccessFixtureResponse() async throws {
         // Given
@@ -22,11 +14,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch()
 
         // Then
         #expect(response.status == .success)
@@ -46,11 +34,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch()
 
         // Then
         #expect(response.status == .success)
@@ -69,11 +53,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch()
 
         // Then
         #expect(response.status == .apiError)
@@ -94,11 +74,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch()
 
         // Then
         #expect(response.status == .apiError)
@@ -120,11 +96,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch()
 
         // Then
         #expect(response.status == .success)
@@ -148,11 +120,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch()
 
         // Then
         #expect(response.status == .success)
@@ -170,11 +138,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch()
 
         // Then
         #expect(response.status == .success)
@@ -194,11 +158,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch()
 
         // Then
         #expect(response.status == .success)
@@ -230,16 +190,8 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        let okResponse = await withCheckedContinuation { continuation in
-            okRequest.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
-        let successResponse = await withCheckedContinuation { continuation in
-            successRequest.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let okResponse = await okRequest.fetch()
+        let successResponse = await successRequest.fetch()
 
         // Then
         #expect(okResponse.status == .success)
@@ -269,11 +221,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.fetch { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.fetch()
 
         // Then
         #expect(response.status == .success)
@@ -307,11 +255,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        let response = await withCheckedContinuation { continuation in
-            request.upload(files: [fileData], params: ["note": "ok"]) { response in
-                continuation.resume(returning: response)
-            }
-        }
+        let response = await request.upload(files: [fileData], params: ["note": "ok"])
 
         // Then
         #expect(response.status == .success)
@@ -340,7 +284,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        _ = await fetchResponse(for: request)
+        _ = await request.fetch()
 
         // Then
         let requestLog = try #require(spy.messages.first)
@@ -378,7 +322,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        _ = await fetchResponse(for: request)
+        _ = await request.fetch()
 
         // Then
         let requestLog = try #require(spy.messages.first)
@@ -400,7 +344,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        _ = await fetchResponse(for: request)
+        _ = await request.fetch()
 
         // Then
         let responseLog = try #require(spy.messages.last)
@@ -428,7 +372,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        _ = await fetchResponse(for: request)
+        _ = await request.fetch()
 
         // Then
         let responseLog = try #require(spy.messages.last)
@@ -449,7 +393,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        _ = await fetchResponse(for: request)
+        _ = await request.fetch()
 
         // Then
         let responseLog = try #require(spy.messages.last)
@@ -471,7 +415,7 @@ struct SwiftNetworkIntegrationTests {
         )
 
         // When
-        let response = await fetchResponse(for: request)
+        let response = await request.fetch()
 
         // Then
         #expect(response.status == .noInternet)
