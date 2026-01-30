@@ -40,7 +40,7 @@ public struct FileUploadData {
     }
 }
 
-public class Request: Selfie, @unchecked Sendable {
+public class Request: Selfie {
 	
     public var method: HTTPMethod
     public var baseURL: String
