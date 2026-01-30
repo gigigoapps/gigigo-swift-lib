@@ -25,7 +25,7 @@ public enum ResponseStatus {
 	case untrustedCertificate
 }
 
-public class Response: Selfie, @unchecked Sendable {
+public class Response: Selfie {
 	
 	public var status: ResponseStatus
 	public var statusCode: Int
