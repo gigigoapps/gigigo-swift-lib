@@ -64,6 +64,7 @@ public class Request: Selfie {
     private let session: URLSession?
 
     // Async APIs return Response and never throw; callers should inspect Response.status and Response.error.
+    @concurrent
     public func fetch() async -> Response {
         guard let request = self.buildRequest() else {
             return Response.invalidURL()
@@ -108,6 +109,7 @@ public class Request: Selfie {
         }
     }
 
+    @concurrent
     public func fetch(downloadTo fileURL: URL) async -> Response {
         guard let request = self.buildRequest() else {
             return Response.invalidURL()
@@ -156,6 +158,7 @@ public class Request: Selfie {
         }
     }
 
+    @concurrent
     public func upload(files: [FileUploadData], params: [String: Any]) async -> Response {
         guard var request = self.buildRequest(), let boundary = self.generateBoundary() else {
             return Response.invalidURL()
