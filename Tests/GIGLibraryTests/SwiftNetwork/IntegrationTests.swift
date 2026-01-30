@@ -421,4 +421,108 @@ struct SwiftNetworkIntegrationTests {
         #expect(response.status == .noInternet)
         #expect(spy.messages.isEmpty)
     }
+
+    @Test("Given a server error response, when fetch is called, then it returns the HTTP status code and unknown error status")
+    func fetchHandlesHttpErrorStatus() async {
+        // Given
+        let errorBody = Data("Internal Server Error".utf8)
+        MockURLProtocol.respond(
+            path: "/server-error",
+            statusCode: 500,
+            headers: ["Content-Type": "text/plain"],
+            data: errorBody
+        )
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/server-error"
+        )
+
+        // When
+        let response = await request.fetch()
+
+        // Then
+        #expect(response.status == .unknownError)
+        #expect(response.statusCode == 500)
+    }
+
+    @Test("Given a cancelled task, when fetch starts, then it returns a cancelled response without calling the network")
+    func fetchHandlesCancellation() async {
+        // Given
+        var didReceiveRequest = false
+        MockURLProtocol.respond(path: "/cancel") { _ in
+            didReceiveRequest = true
+        }
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/cancel"
+        )
+
+        // When
+        let task = Task {
+            await Task.yield()
+            return await request.fetch()
+        }
+        task.cancel()
+        let response = await task.value
+
+        // Then
+        #expect(response.error?.code == URLError.cancelled.rawValue)
+        #expect(response.statusCode == URLError.cancelled.rawValue)
+        #expect(didReceiveRequest == false)
+    }
+
+    @Test("Given reachability is offline, when upload is called, then it returns no-internet without sending the request")
+    func uploadReturnsNoInternetWhenOffline() async {
+        // Given
+        var didReceiveRequest = false
+        MockURLProtocol.respond(path: "/upload-offline") { _ in
+            didReceiveRequest = true
+        }
+        let request = Request.testRequest(
+            method: .post,
+            baseUrl: "https://example.com",
+            endpoint: "/upload-offline",
+            reachable: false
+        )
+        let fileData = FileUploadData(
+            data: Data("file".utf8),
+            mimeType: "text/plain",
+            filename: "file.txt",
+            name: "payload"
+        )
+
+        // When
+        let response = await request.upload(files: [fileData], params: ["title": "Sample"])
+
+        // Then
+        #expect(response.status == .noInternet)
+        #expect(didReceiveRequest == false)
+    }
+
+    @Test("Given a download request, when fetch download completes, then it writes the file to disk")
+    func fetchDownloadWritesFile() async throws {
+        // Given
+        let destinationURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let payload = Data("download".utf8)
+        MockURLProtocol.respond(
+            path: "/download",
+            statusCode: 200,
+            headers: ["Content-Type": "application/octet-stream"],
+            data: payload
+        )
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/download"
+        )
+
+        // When
+        let response = await request.fetch(downloadTo: destinationURL)
+
+        // Then
+        defer { try? FileManager.default.removeItem(at: destinationURL) }
+        let storedData = try Data(contentsOf: destinationURL)
+        #expect(response.status == .success)
+        #expect(response.statusCode == 200)
+        #expect(storedData == payload)
+    }
 }
