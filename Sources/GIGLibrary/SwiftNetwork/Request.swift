@@ -52,16 +52,114 @@ public class Request: Selfie {
     public var standardType: StandardType = .gigigo
     public var timeout: TimeInterval = 15.0
 
+    var cache: NSURLRequest.CachePolicy = NSURLRequest.CachePolicy.useProtocolCachePolicy
+
     private var bodyParamsArray: [[String: Any]]?
     private var logInfo: RequestLogInfo?
     private var networkLogManager: NetworkLogManaging
-    var cache: NSURLRequest.CachePolicy = NSURLRequest.CachePolicy.useProtocolCachePolicy
 	
 	private var request: URLRequest?
 	private weak var task: URLSessionTask?
     private let reachability: ReachabilityInput
     private let sessionConfiguration: URLSessionConfiguration?
     private let session: URLSession?
+
+    public convenience init(
+        method: HTTPMethod = .get,
+        baseUrl: String,
+        endpoint: String,
+        headers: [String: String]? = nil,
+        urlParams: [String: Any]? = nil,
+        bodyParams: [String: Any]? = nil,
+        timeout: TimeInterval? = nil,
+        verbose: Bool = false,
+        standard: StandardType = .gigigo
+    ) {
+        self.init(
+            method: method,
+            baseUrl: baseUrl,
+            endpoint: endpoint,
+            headers: headers,
+            urlParams: urlParams,
+            bodyParams: bodyParams,
+            bodyParamsArray: nil,
+            timeout: timeout,
+            verbose: verbose,
+            standard: standard,
+            logInfo: nil,
+            networkLogManager: DefaultNetworkLogManager(),
+            sessionConfiguration: nil,
+            session: nil,
+            reachability: ReachabilityWrapper.shared
+        )
+    }
+
+    public convenience init(
+        method: HTTPMethod = .get,
+        baseUrl: String,
+        endpoint: String,
+        headers: [String: String]? = nil,
+        urlParams: [String: Any]? = nil,
+        bodyParamsArray: [[String: Any]]? = nil,
+        timeout: TimeInterval? = nil,
+        verbose: Bool = false,
+        standard: StandardType = .gigigo
+    ) {
+        self.init(
+            method: method,
+            baseUrl: baseUrl,
+            endpoint: endpoint,
+            headers: headers,
+            urlParams: urlParams,
+            bodyParams: nil,
+            bodyParamsArray: bodyParamsArray,
+            timeout: timeout,
+            verbose: verbose,
+            standard: standard,
+            logInfo: nil,
+            networkLogManager: DefaultNetworkLogManager(),
+            sessionConfiguration: nil,
+            session: nil,
+            reachability: ReachabilityWrapper.shared
+        )
+    }
+
+    init(
+        method: HTTPMethod = .get,
+        baseUrl: String,
+        endpoint: String,
+        headers: [String: String]? = nil,
+        urlParams: [String: Any]? = nil,
+        bodyParams: [String: Any]? = nil,
+        bodyParamsArray: [[String: Any]]? = nil,
+        timeout: TimeInterval? = nil,
+        verbose: Bool = false,
+        standard: StandardType = .gigigo,
+        logInfo: RequestLogInfo? = nil,
+        networkLogManager: NetworkLogManaging = DefaultNetworkLogManager(),
+        sessionConfiguration: URLSessionConfiguration? = nil,
+        session: URLSession? = nil,
+        reachability: ReachabilityInput = ReachabilityWrapper.shared
+    ) {
+        self.method = method
+        self.headers = headers
+        self.urlParams = urlParams
+        self.bodyParams = bodyParams
+        self.bodyParamsArray = bodyParamsArray
+        self.timeout = timeout ?? self.timeout
+        self.verbose = verbose
+        self.standardType = standard
+        self.logInfo = logInfo
+        self.networkLogManager = networkLogManager
+        self.sessionConfiguration = sessionConfiguration
+        self.session = session
+        self.reachability = reachability
+
+        self.baseURL = baseUrl
+        self.endpoint = endpoint
+    }
+    
+    // MARK: - Public API
 
     // Async APIs return Response and never throw; callers should inspect Response.status and Response.error.
     @concurrent
@@ -207,102 +305,7 @@ public class Request: Selfie {
             )
         }
     }
-    
-    public convenience init(
-        method: HTTPMethod = .get,
-        baseUrl: String,
-        endpoint: String,
-        headers: [String: String]? = nil,
-        urlParams: [String: Any]? = nil,
-        bodyParams: [String: Any]? = nil,
-        timeout: TimeInterval? = nil,
-        verbose: Bool = false,
-        standard: StandardType = .gigigo
-    ) {
-        self.init(
-            method: method,
-            baseUrl: baseUrl,
-            endpoint: endpoint,
-            headers: headers,
-            urlParams: urlParams,
-            bodyParams: bodyParams,
-            bodyParamsArray: nil,
-            timeout: timeout,
-            verbose: verbose,
-            standard: standard,
-            logInfo: nil,
-            networkLogManager: DefaultNetworkLogManager(),
-            sessionConfiguration: nil,
-            session: nil,
-            reachability: ReachabilityWrapper.shared
-        )
-    }
 
-    public convenience init(
-        method: HTTPMethod = .get,
-        baseUrl: String,
-        endpoint: String,
-        headers: [String: String]? = nil,
-        urlParams: [String: Any]? = nil,
-        bodyParamsArray: [[String: Any]]? = nil,
-        timeout: TimeInterval? = nil,
-        verbose: Bool = false,
-        standard: StandardType = .gigigo
-    ) {
-        self.init(
-            method: method,
-            baseUrl: baseUrl,
-            endpoint: endpoint,
-            headers: headers,
-            urlParams: urlParams,
-            bodyParams: nil,
-            bodyParamsArray: bodyParamsArray,
-            timeout: timeout,
-            verbose: verbose,
-            standard: standard,
-            logInfo: nil,
-            networkLogManager: DefaultNetworkLogManager(),
-            sessionConfiguration: nil,
-            session: nil,
-            reachability: ReachabilityWrapper.shared
-        )
-    }
-
-    init(
-        method: HTTPMethod = .get,
-        baseUrl: String,
-        endpoint: String,
-        headers: [String: String]? = nil,
-        urlParams: [String: Any]? = nil,
-        bodyParams: [String: Any]? = nil,
-        bodyParamsArray: [[String: Any]]? = nil,
-        timeout: TimeInterval? = nil,
-        verbose: Bool = false,
-        standard: StandardType = .gigigo,
-        logInfo: RequestLogInfo? = nil,
-        networkLogManager: NetworkLogManaging = DefaultNetworkLogManager(),
-        sessionConfiguration: URLSessionConfiguration? = nil,
-        session: URLSession? = nil,
-        reachability: ReachabilityInput = ReachabilityWrapper.shared
-    ) {
-        self.method = method
-        self.headers = headers
-        self.urlParams = urlParams
-        self.bodyParams = bodyParams
-        self.bodyParamsArray = bodyParamsArray
-        self.timeout = timeout ?? self.timeout
-        self.verbose = verbose
-        self.standardType = standard
-        self.logInfo = logInfo
-        self.networkLogManager = networkLogManager
-        self.sessionConfiguration = sessionConfiguration
-        self.session = session
-        self.reachability = reachability
-
-        self.baseURL = baseUrl
-        self.endpoint = endpoint
-    }
-    
 	public func cancel() {
 		self.task?.cancel()
 	}
