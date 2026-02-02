@@ -25,6 +25,11 @@ public enum ResponseStatus {
 	case untrustedCertificate
 }
 
+public enum ResponseError: Error {
+	case bodyNil
+	case unexpectedDataType
+}
+
 public class Response: Selfie, @unchecked Sendable {
 	
 	public var status: ResponseStatus
@@ -41,15 +46,9 @@ public class Response: Selfie, @unchecked Sendable {
 	
 	// MARK: - Initializers
 	
-	init() {
+    init(data: Data?, response: URLResponse?, error: Error?, standardType: StandardType = .gigigo, networkLogManager: NetworkLogManaging = DefaultNetworkLogManager()) {
 		self.status = .unknownError
 		self.statusCode = 0
-        self.networkLogManager = DefaultNetworkLogManager()
-	}
-	
-    convenience init(data: Data?, response: URLResponse?, error: Error?, standardType: StandardType = .gigigo, networkLogManager: NetworkLogManaging = DefaultNetworkLogManager()) {
-		self.init()
-		
         self.networkLogManager = networkLogManager
         self.standardType = standardType
 		self.error = error as NSError?
@@ -81,7 +80,28 @@ public class Response: Selfie, @unchecked Sendable {
         self.init(data: nil, response: nil, error: error, standardType: standardType, networkLogManager: networkLogManager)
     }
 	
-    // MARK: - Instance methods
+    // MARK: - Public API
+
+    func json() throws -> JSON {
+		guard let json = self.data else {
+			throw ResponseError.bodyNil
+		}
+		
+		return json
+	}
+	
+    @MainActor
+    func image() throws -> UIImage {
+		guard let imageData = self.body else {
+			throw ResponseError.bodyNil
+		}
+        guard !isGifData(), let image = UIImage(data: imageData, scale: UIScreen.main.scale) else {
+            throw ResponseError.unexpectedDataType
+        }
+        return image
+	}
+
+    // MARK: - Internal API
     
     class func noInternet() -> Response {
         let error = NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet, message: "No Internet")
@@ -101,8 +121,24 @@ public class Response: Selfie, @unchecked Sendable {
         return response
     }
 	
-	// MARK: - Private Helpers
+    func logResponse() {
+        self.logResponse(nil)
+    }
+	
+    func logResponse(_ logInfo: RequestLogInfo?) {
+        let log = ResponseLogFormatter.buildResponseLog(url: self.url, statusCode: self.statusCode, headers: self.headers, body: self.body)
+        self.networkLogManager.log(log, info: logInfo)
+	}
+
+    // MARK: - Private Helpers
     
+    private func isGifData() -> Bool {
+        guard let url = url else {
+            return false
+        }
+        return url.pathExtension == "gif"
+    }
+		
 	private func parseJSON() {
 		guard
 			let body = self.body,
@@ -168,48 +204,4 @@ public class Response: Selfie, @unchecked Sendable {
 			return .unknownError
 		}
 	}
-    
-    func logResponse() {
-        self.logResponse(nil)
-    }
-	
-    func logResponse(_ logInfo: RequestLogInfo?) {
-        let log = ResponseLogFormatter.buildResponseLog(url: self.url, statusCode: self.statusCode, headers: self.headers, body: self.body)
-        self.networkLogManager.log(log, info: logInfo)
-	}
-}
-
-
-public enum ResponseError: Error {
-	case bodyNil
-	case unexpectedDataType
-}
-
-public extension Response {
-	
-    func json() throws -> JSON {
-		guard let json = self.data else {
-			throw ResponseError.bodyNil
-		}
-		
-		return json
-	}
-	
-    @MainActor
-    func image() throws -> UIImage {
-		guard let imageData = self.body else {
-			throw ResponseError.bodyNil
-		}
-        guard !isGifData(), let image = UIImage(data: imageData, scale: UIScreen.main.scale) else {
-            throw ResponseError.unexpectedDataType
-        }
-        return image
-	}
-    
-    private func isGifData() -> Bool {
-        guard let url = url else {
-            return false
-        }
-        return url.pathExtension == "gif"
-    }
 }
