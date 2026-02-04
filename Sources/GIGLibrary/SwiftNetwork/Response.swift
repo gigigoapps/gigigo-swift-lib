@@ -14,7 +14,7 @@ public let kGIGNetworkErrorDomain = "com.gigigo.network"
 public let kGIGNetworkErrorMessage = "GIGNETWORK_ERROR_MESSAGE"
 
 
-public enum ResponseStatus {
+public enum ResponseStatus: Sendable {
 	case success
 	case errorParsingJson
 	case sessionExpired

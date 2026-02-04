@@ -208,6 +208,34 @@ public class Request: Selfie {
     }
 
     @concurrent
+    public func fetchDecodable<ResponseData: Decodable>() async throws -> ResponseData {
+        let response = await self.fetch()
+
+        guard response.status == .success else {
+            throw FetchDecodableError.requestFailed(
+                status: response.status,
+                statusCode: response.statusCode,
+                underlying: response.error
+            )
+        }
+
+        let payload = self.payloadDataForDecoding(from: response)
+        let usedEmptyPayloadFallback = payload == nil || payload?.isEmpty == true
+        let dataToDecode = payload ?? Data("{}".utf8)
+        let decoder = JSONDecoder()
+
+        do {
+            return try decoder.decode(ResponseData.self, from: dataToDecode)
+        } catch {
+            if usedEmptyPayloadFallback {
+                throw FetchDecodableError.emptyResponseBody(statusCode: response.statusCode)
+            }
+
+            throw FetchDecodableError.decodingFailed(underlying: error)
+        }
+    }
+
+    @concurrent
     public func fetch(downloadTo fileURL: URL) async -> Response {
         guard let request = self.buildRequest() else {
             return Response.invalidURL()
@@ -346,6 +374,15 @@ public class Request: Selfie {
     private func logRequestError(message: String) {
         guard self.verbose else { return }
         self.networkLogManager.log(message, info: self.logInfo)
+    }
+
+    private func payloadDataForDecoding(from response: Response) -> Data? {
+        switch self.standardType {
+        case .gigigo:
+            return response.data?.toData()
+        case .basic:
+            return response.body
+        }
     }
 
     private func replaceDownloadedFile(at sourceURL: URL, destination destinationURL: URL) throws {

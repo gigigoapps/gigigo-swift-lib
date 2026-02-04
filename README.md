@@ -46,6 +46,63 @@ if response.status == .success {
 }
 ```
 
+### Typed decodable fetch
+
+```swift
+struct Profile: Decodable {
+    let id: Int
+    let name: String
+}
+
+let request = Request(
+    method: .get,
+    baseUrl: "https://api.example.com",
+    endpoint: "/v1/profile"
+)
+
+do {
+    let profile: Profile = try await request.fetchDecodable()
+    print("Profile: \(profile)")
+} catch let error as FetchDecodableError {
+    print("Decodable fetch failed: \(error)")
+} catch {
+    print("Unexpected error: \(error)")
+}
+```
+
+Type inference also works naturally from function return types:
+
+```swift
+func myRequest() async throws -> Profile {
+    try await Request(
+        baseUrl: "https://api.example.com",
+        endpoint: "/v1/profile"
+    )
+    .fetchDecodable()
+}
+```
+
+`fetchDecodable()` throws `FetchDecodableError` to distinguish failure reasons:
+
+- `requestFailed(status:statusCode:underlying:)`: transport/API status was not successful.
+- `emptyResponseBody(statusCode:)`: response had no decodable payload (after empty body fallback).
+- `decodingFailed(underlying:)`: payload exists but does not match your `Decodable` model.
+
+Example handling by case:
+
+```swift
+do {
+    let profile: Profile = try await request.fetchDecodable()
+    print(profile)
+} catch let FetchDecodableError.requestFailed(status, code, _) {
+    print("Request failed: \(status) (\(code))")
+} catch let FetchDecodableError.emptyResponseBody(code) {
+    print("Empty body for status code \(code)")
+} catch let FetchDecodableError.decodingFailed(error) {
+    print("Decoding mismatch: \(error)")
+}
+```
+
 ### Download to file
 
 ```swift
