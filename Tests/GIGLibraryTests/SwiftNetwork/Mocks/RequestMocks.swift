@@ -163,6 +163,19 @@ extension MockURLProtocol {
 
     static func respond(
         path: String,
+        error: Error,
+        method: HTTPMethod? = nil,
+        delay: TimeInterval = 0,
+        _ capture: ((URLRequest) -> Void)? = nil
+    ) {
+        registerHandler(method: method, path: path, delay: delay) { request in
+            _ = prepareCapturedRequest(request, capture)
+            throw error
+        }
+    }
+
+    static func respond(
+        path: String,
         fixture name: String,
         statusCode: Int = 200,
         headers: [String: String]? = ["Content-Type": "application/json"],
