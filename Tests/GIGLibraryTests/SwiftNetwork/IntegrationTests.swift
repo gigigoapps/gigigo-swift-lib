@@ -12,6 +12,27 @@ private final class SendableRequestBox: @unchecked Sendable {
 
 @Suite(.serialized)
 struct SwiftNetworkIntegrationTests {
+    private func assertThrowsNSError(
+        _ block: () async throws -> Void,
+        assertion: (NSError) -> Void
+    ) async {
+        var didThrow = false
+        var didThrowUnexpected = false
+
+        do {
+            try await block()
+        } catch let error as NSError {
+            didThrow = true
+            assertion(error)
+        } catch {
+            didThrow = true
+            didThrowUnexpected = true
+        }
+
+        #expect(didThrow)
+        #expect(!didThrowUnexpected)
+    }
+
     @Test("Given a request and the success fixture, when fetch is called, then response matches fixture success")
     func fetchReturnsSuccessFixtureResponse() async throws {
         // Given
@@ -134,6 +155,92 @@ struct SwiftNetworkIntegrationTests {
         #expect(response.status == .success)
         #expect(response.statusCode == 204)
         #expect(response.data == nil)
+    }
+
+    @Test("Given a 204 response with empty body, when fetchVoid is called, then it does not throw")
+    func fetchVoidDoesNotThrowForNoContentSuccess() async throws {
+        // Given
+        let spy = NetworkLogManagerSpy()
+        MockURLProtocol.respond(
+            path: "/void-no-content",
+            statusCode: 204,
+            headers: ["Content-Type": "application/json"],
+            data: nil
+        )
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/void-no-content",
+            verbose: true,
+            networkLogManager: spy
+        )
+
+        // When
+        try await request.fetchVoid()
+
+        // Then
+        #expect(spy.invocationCount == 2)
+        let responseLog = try #require(spy.lastMessage)
+        #expect(responseLog.contains("******** RESPONSE ********"))
+        #expect(responseLog.contains(" - CODE:\t204"))
+    }
+
+    @Test("Given an api error fixture, when fetchVoid is called, then it throws the response error")
+    func fetchVoidThrowsApiResponseError() async {
+        // Given
+        MockURLProtocol.respond(path: "/void-api-error", fixture: "api_error", statusCode: 400)
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/void-api-error"
+        )
+
+        // When/Then
+        await assertThrowsNSError({
+            try await request.fetchVoid()
+        }, assertion: { error in
+            #expect(error.domain == kGIGNetworkErrorDomain)
+            #expect(error.code == 15000)
+        })
+    }
+
+    @Test("Given reachability is offline, when fetchVoid is called, then it throws no internet error")
+    func fetchVoidThrowsNoInternetErrorWhenOffline() async {
+        // Given
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/void-offline",
+            reachable: false
+        )
+
+        // When/Then
+        await assertThrowsNSError({
+            try await request.fetchVoid()
+        }, assertion: { error in
+            #expect(error.domain == NSURLErrorDomain)
+            #expect(error.code == NSURLErrorNotConnectedToInternet)
+        })
+    }
+
+    @Test("Given a 401 response without response error, when fetchVoid is called, then it throws fallback error with status code")
+    func fetchVoidThrowsFallbackErrorWhenResponseHasNoError() async {
+        // Given
+        MockURLProtocol.respond(
+            path: "/void-unauthorized-no-error",
+            statusCode: 401,
+            headers: ["Content-Type": "text/plain"],
+            data: nil
+        )
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/void-unauthorized-no-error"
+        )
+
+        // When/Then
+        await assertThrowsNSError({
+            try await request.fetchVoid()
+        }, assertion: { error in
+            #expect(error.domain == kGIGNetworkErrorDomain)
+            #expect(error.code == 401)
+        })
     }
 
     @Test("Given a request and an invalid JSON fixture, when fetch is called, then response is success with no data expected")
