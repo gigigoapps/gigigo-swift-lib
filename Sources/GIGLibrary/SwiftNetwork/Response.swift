@@ -62,10 +62,19 @@ public class Response: Selfie, @unchecked Sendable {
 				self.status = .success
 			}
 			
-			if let contentType = self.headers?["Content-Type"] as? String,
-				contentType.contains("json") {
+            if self.shouldParseJSON(headers: self.headers, body: self.body) {
                 self.parseJSON()
-			}
+            }
+
+            if !(200...300).contains(self.statusCode), self.status == .unknownError {
+                let fallbackError = NSError(
+                    domain: kGIGNetworkErrorDomain,
+                    code: self.statusCode,
+                    message: "HTTP error \(self.statusCode)"
+                )
+                self.error = fallbackError
+                self.status = self.parseError(error: fallbackError)
+            }
 		} else {
 			self.statusCode = self.error?.code ?? -1
 			self.status = self.parseError(error: self.error)
@@ -144,6 +153,42 @@ public class Response: Selfie, @unchecked Sendable {
         }
         return url.pathExtension == "gif"
     }
+
+    private func shouldParseJSON(headers: [AnyHashable: Any]?, body: Data?) -> Bool {
+        guard let body, !body.isEmpty else {
+            return false
+        }
+
+        if let contentType = self.contentType(from: headers),
+           contentType.localizedCaseInsensitiveContains("json") {
+            return true
+        }
+
+        return self.bodyLooksLikeJSON(body)
+    }
+
+    private func contentType(from headers: [AnyHashable: Any]?) -> String? {
+        guard let headers else { return nil }
+
+        for (key, value) in headers {
+            if let keyString = key as? String,
+               keyString.caseInsensitiveCompare("Content-Type") == .orderedSame,
+               let valueString = value as? String {
+                return valueString
+            }
+        }
+
+        return nil
+    }
+
+    private func bodyLooksLikeJSON(_ body: Data) -> Bool {
+        guard let bodyString = String(data: body, encoding: .utf8) else {
+            return false
+        }
+
+        let trimmed = bodyString.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("{") || trimmed.hasPrefix("[")
+    }
 		
 	private func parseJSON() {
 		guard
@@ -196,7 +241,7 @@ public class Response: Selfie, @unchecked Sendable {
 		self.statusCode = err.code
 		
 		switch err.code {
-		case 401:
+		case 401, 403:
 			return .sessionExpired
 		case -1001:
 			return .timeout

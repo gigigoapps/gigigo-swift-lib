@@ -4,19 +4,6 @@ import Testing
 
 @Suite(.serialized)
 struct RequestTests {
-    private struct EncodableBody: Encodable {
-        let name: String
-        let count: Int
-    }
-
-    private struct FailingEncodable: Encodable {
-        struct ForcedError: Error {}
-
-        func encode(to encoder: Encoder) throws {
-            throw ForcedError()
-        }
-    }
-
     @Test("Given a POST request with body params, when fetch is called, then URL, headers, and body are built correctly")
     func fetchBuildsRequestWithBodyParams() async throws {
         // Given

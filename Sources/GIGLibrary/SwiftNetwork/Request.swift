@@ -323,8 +323,9 @@ public class Request: Selfie {
                 standardType: .basic,
                 networkLogManager: self.networkLogManager
             )
-            try self.replaceDownloadedFile(at: location, destination: fileURL)
-            response.statusCode = 200
+            if response.status == .success {
+                try self.replaceDownloadedFile(at: location, destination: fileURL)
+            }
             self.logIfVerbose(response)
             return response
         } catch let buildError as RequestBuildError {
