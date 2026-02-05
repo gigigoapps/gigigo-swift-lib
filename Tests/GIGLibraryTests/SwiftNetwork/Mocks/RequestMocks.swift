@@ -1,16 +1,31 @@
 import Foundation
 @testable import GIGLibrary
 
-final class MockURLProtocol: URLProtocol {
+final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     private struct RouteHandler {
         let method: HTTPMethod?
         let path: String?
         let matcher: ((URLRequest) -> Bool)?
+        let delay: TimeInterval
         let handler: (URLRequest) throws -> (HTTPURLResponse, Data?)
     }
 
     private static let handlerQueue = DispatchQueue(label: "MockURLProtocol.handlers")
     private nonisolated(unsafe) static var handlers: [RouteHandler] = []
+    private let stopLock = NSLock()
+    private var _isStopped = false
+
+    private var isStopped: Bool {
+        stopLock.lock()
+        defer { stopLock.unlock() }
+        return _isStopped
+    }
+
+    private func setStopped() {
+        stopLock.lock()
+        _isStopped = true
+        stopLock.unlock()
+    }
 
     override class func canInit(with request: URLRequest) -> Bool {
         return true
@@ -21,25 +36,36 @@ final class MockURLProtocol: URLProtocol {
     }
 
     override func startLoading() {
-        guard let handler = MockURLProtocol.handler(for: request) else {
+        guard let route = MockURLProtocol.handler(for: request) else {
             preconditionFailure("Request handler is missing.")
         }
 
         do {
-            let (response, data) = try handler(request)
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            if let data = data {
-                client?.urlProtocol(self, didLoad: data)
+            let (response, data) = try route.handler(request)
+            let sendResponse: @Sendable () -> Void = { [weak self] in
+                guard let self, !self.isStopped else { return }
+                self.client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                if let data {
+                    self.client?.urlProtocol(self, didLoad: data)
+                }
+                self.client?.urlProtocolDidFinishLoading(self)
             }
-            client?.urlProtocolDidFinishLoading(self)
+
+            if route.delay > 0 {
+                DispatchQueue.global().asyncAfter(deadline: .now() + route.delay, execute: sendResponse)
+            } else {
+                sendResponse()
+            }
         } catch {
             client?.urlProtocol(self, didFailWithError: error)
         }
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        setStopped()
+    }
 
-    private static func handler(for request: URLRequest) -> ((URLRequest) throws -> (HTTPURLResponse, Data?))? {
+    private static func handler(for request: URLRequest) -> RouteHandler? {
         let methodString = request.httpMethod ?? HTTPMethod.get.rawValue
         let method = HTTPMethod(rawValue: methodString) ?? .get
 
@@ -55,26 +81,28 @@ final class MockURLProtocol: URLProtocol {
 
                 let methodMatches = route.method.map { $0 == method } ?? true
                 return methodMatches && route.path == url.path
-            })?.handler
+            })
         }
     }
 
     private static func registerHandler(
         method: HTTPMethod?,
         path: String,
+        delay: TimeInterval = 0,
         handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data?)
     ) {
         handlerQueue.sync {
-            handlers.append(RouteHandler(method: method, path: path, matcher: nil, handler: handler))
+            handlers.append(RouteHandler(method: method, path: path, matcher: nil, delay: delay, handler: handler))
         }
     }
 
     private static func registerHandler(
         matcher: @escaping (URLRequest) -> Bool,
+        delay: TimeInterval = 0,
         handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data?)
     ) {
         handlerQueue.sync {
-            handlers.append(RouteHandler(method: nil, path: nil, matcher: matcher, handler: handler))
+            handlers.append(RouteHandler(method: nil, path: nil, matcher: matcher, delay: delay, handler: handler))
         }
     }
 }
@@ -123,9 +151,10 @@ extension MockURLProtocol {
         headers: [String: String]? = nil,
         data: Data? = nil,
         method: HTTPMethod? = nil,
+        delay: TimeInterval = 0,
         _ capture: ((URLRequest) -> Void)? = nil
     ) {
-        registerHandler(method: method, path: path) { request in
+        registerHandler(method: method, path: path, delay: delay) { request in
             _ = prepareCapturedRequest(request, capture)
             let response = HTTPURLResponse.fake(url: request.url!, statusCode: statusCode, headers: headers)
             return (response, data)
@@ -138,9 +167,10 @@ extension MockURLProtocol {
         statusCode: Int = 200,
         headers: [String: String]? = ["Content-Type": "application/json"],
         method: HTTPMethod? = nil,
+        delay: TimeInterval = 0,
         _ capture: ((URLRequest) -> Void)? = nil
     ) {
-        registerHandler(method: method, path: path) { request in
+        registerHandler(method: method, path: path, delay: delay) { request in
             _ = prepareCapturedRequest(request, capture)
             let data = try FixtureLoader.data(named: name)
             let response = HTTPURLResponse.fake(url: request.url!, statusCode: statusCode, headers: headers)
@@ -150,10 +180,11 @@ extension MockURLProtocol {
 
     static func respond(
         routes: [FixtureRoute],
+        delay: TimeInterval = 0,
         _ capture: ((URLRequest) -> Void)? = nil
     ) {
         for route in routes {
-            registerHandler(method: route.method, path: route.path) { request in
+            registerHandler(method: route.method, path: route.path, delay: delay) { request in
                 _ = prepareCapturedRequest(request, capture)
 
                 guard let url = request.url else {
@@ -172,9 +203,10 @@ extension MockURLProtocol {
         fixtureForRequest: @escaping (URLRequest) throws -> String,
         statusCode: Int = 200,
         headers: [String: String]? = ["Content-Type": "application/json"],
+        delay: TimeInterval = 0,
         _ capture: ((URLRequest) -> Void)? = nil
     ) {
-        registerHandler(matcher: matcher) { request in
+        registerHandler(matcher: matcher, delay: delay) { request in
             _ = prepareCapturedRequest(request, capture)
 
             guard let url = request.url else {
@@ -271,6 +303,39 @@ extension URLSessionConfiguration {
 }
 
 extension Request {
+    static func testRequest<Body: Encodable>(
+        method: HTTPMethod = .get,
+        baseUrl: String,
+        endpoint: String,
+        headers: [String: String]? = nil,
+        urlParams: [String: Any]? = nil,
+        body: Body,
+        timeout: TimeInterval? = nil,
+        verbose: Bool = false,
+        standard: StandardType = .gigigo,
+        sessionConfiguration: URLSessionConfiguration? = nil,
+        reachable: Bool = true,
+        networkLogManager: NetworkLogManaging = DefaultNetworkLogManager()
+    ) -> Request {
+        let configuration = sessionConfiguration ?? .testConfiguration()
+        return Request(
+            method: method,
+            baseUrl: baseUrl,
+            endpoint: endpoint,
+            headers: headers,
+            urlParams: urlParams,
+            bodyParams: nil,
+            bodyParamsArray: nil,
+            encodableBodyProvider: { try JSONEncoder().encode(body) },
+            timeout: timeout,
+            verbose: verbose,
+            standard: standard,
+            networkLogManager: networkLogManager,
+            sessionConfiguration: configuration,
+            reachability: MockReachabilityProvider(reachable: reachable)
+        )
+    }
+
     static func testRequest(
         method: HTTPMethod = .get,
         baseUrl: String,

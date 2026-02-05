@@ -4,6 +4,19 @@ import Testing
 
 @Suite(.serialized)
 struct RequestTests {
+    private struct EncodableBody: Encodable {
+        let name: String
+        let count: Int
+    }
+
+    private struct FailingEncodable: Encodable {
+        struct ForcedError: Error {}
+
+        func encode(to encoder: Encoder) throws {
+            throw ForcedError()
+        }
+    }
+
     @Test("Given a POST request with body params, when fetch is called, then URL, headers, and body are built correctly")
     func fetchBuildsRequestWithBodyParams() async throws {
         // Given
@@ -74,6 +87,62 @@ struct RequestTests {
         #expect(bodyJson?.count == 2)
         #expect(bodyJson?.first?["id"] as? Int == 1)
         #expect(bodyJson?.last?["id"] as? Int == 2)
+    }
+
+    @Test("Given a POST request with an Encodable body, when fetch is called, then body and headers are built correctly")
+    func fetchBuildsRequestWithEncodableBody() async throws {
+        // Given
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.respond(path: "/encodable") { request in
+            capturedRequest = request
+        }
+
+        let request = Request.testRequest(
+            method: .post,
+            baseUrl: "https://example.com",
+            endpoint: "/encodable",
+            body: EncodableBody(name: "Taylor", count: 3)
+        )
+
+        // When
+        _ = await request.fetch()
+
+        // Then
+        let urlRequest = try #require(capturedRequest)
+        let bodyObject = try #require(urlRequest.httpBody)
+        let bodyJson = try JSONSerialization.jsonObject(with: bodyObject) as? [String: Any]
+
+        #expect(urlRequest.httpMethod == HTTPMethod.post.rawValue)
+        #expect(urlRequest.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(bodyJson?["name"] as? String == "Taylor")
+        #expect(bodyJson?["count"] as? Int == 3)
+    }
+
+    @Test("Given a POST request with an Encodable body that fails encoding, when fetch is called, then it returns cannotEncodeContentData and does not send the request")
+    func fetchReturnsCannotEncodeContentDataWhenEncodableBodyFails() async {
+        // Given
+        var didReceiveRequest = false
+
+        MockURLProtocol.respond(path: "/encodable-failure") { _ in
+            didReceiveRequest = true
+        }
+
+        let request = Request.testRequest(
+            method: .post,
+            baseUrl: "https://example.com",
+            endpoint: "/encodable-failure",
+            body: FailingEncodable()
+        )
+
+        // When
+        let response = await request.fetch()
+
+        // Then
+        #expect(response.status == .unknownError)
+        #expect(response.statusCode == URLError.Code.cannotEncodeContentData.rawValue)
+        #expect(response.error?.code == URLError.Code.cannotEncodeContentData.rawValue)
+        #expect(didReceiveRequest == false)
     }
 
     @Test("Given a POST request with a custom Content-Type header, when fetch is called, then it keeps the custom value and does not inject application/json")

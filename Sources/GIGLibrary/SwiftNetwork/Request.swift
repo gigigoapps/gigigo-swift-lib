@@ -40,6 +40,18 @@ public struct FileUploadData {
     }
 }
 
+private enum RequestBuildError: Error {
+    case invalidURL
+    case bodyEncodingFailed
+    case noInternet
+    case cancelledBeforeExecution
+}
+
+extension URLError.Code {
+    // Compatibility alias because this SDK does not expose `cannotEncodeContentData`.
+    static var cannotEncodeContentData: URLError.Code { .cannotParseResponse }
+}
+
 public class Request: Selfie {
 	
     public var method: HTTPMethod
@@ -55,11 +67,12 @@ public class Request: Selfie {
     var cache: NSURLRequest.CachePolicy = NSURLRequest.CachePolicy.useProtocolCachePolicy
 
     private var bodyParamsArray: [[String: Any]]?
+    private var encodableBodyProvider: (() throws -> Data)?
     private var logInfo: RequestLogInfo?
     private var networkLogManager: NetworkLogManaging
 	
 	private var request: URLRequest?
-	private weak var task: URLSessionTask?
+    private var cancelInFlight: (() -> Void)?
     private let reachability: ReachabilityInput
     private let sessionConfiguration: URLSessionConfiguration?
     private let session: URLSession?
@@ -83,6 +96,7 @@ public class Request: Selfie {
             urlParams: urlParams,
             bodyParams: bodyParams,
             bodyParamsArray: nil,
+            encodableBodyProvider: nil,
             timeout: timeout,
             verbose: verbose,
             standard: standard,
@@ -113,6 +127,38 @@ public class Request: Selfie {
             urlParams: urlParams,
             bodyParams: nil,
             bodyParamsArray: bodyParamsArray,
+            encodableBodyProvider: nil,
+            timeout: timeout,
+            verbose: verbose,
+            standard: standard,
+            logInfo: nil,
+            networkLogManager: DefaultNetworkLogManager(),
+            sessionConfiguration: nil,
+            session: nil,
+            reachability: ReachabilityWrapper.shared
+        )
+    }
+
+    public convenience init<Body: Encodable>(
+        method: HTTPMethod = .get,
+        baseUrl: String,
+        endpoint: String,
+        headers: [String: String]? = nil,
+        urlParams: [String: Any]? = nil,
+        body: Body,
+        timeout: TimeInterval? = nil,
+        verbose: Bool = false,
+        standard: StandardType = .gigigo
+    ) {
+        self.init(
+            method: method,
+            baseUrl: baseUrl,
+            endpoint: endpoint,
+            headers: headers,
+            urlParams: urlParams,
+            bodyParams: nil,
+            bodyParamsArray: nil,
+            encodableBodyProvider: { try JSONEncoder().encode(body) },
             timeout: timeout,
             verbose: verbose,
             standard: standard,
@@ -132,6 +178,7 @@ public class Request: Selfie {
         urlParams: [String: Any]? = nil,
         bodyParams: [String: Any]? = nil,
         bodyParamsArray: [[String: Any]]? = nil,
+        encodableBodyProvider: (() throws -> Data)? = nil,
         timeout: TimeInterval? = nil,
         verbose: Bool = false,
         standard: StandardType = .gigigo,
@@ -146,6 +193,7 @@ public class Request: Selfie {
         self.urlParams = urlParams
         self.bodyParams = bodyParams
         self.bodyParamsArray = bodyParamsArray
+        self.encodableBodyProvider = encodableBodyProvider
         self.timeout = timeout ?? self.timeout
         self.verbose = verbose
         self.standardType = standard
@@ -164,28 +212,25 @@ public class Request: Selfie {
     // Async APIs return Response and never throw; callers should inspect Response.status and Response.error.
     @concurrent
     public func fetch() async -> Response {
-        guard let request = self.buildRequest() else {
-            return Response.invalidURL()
-        }
-        guard self.reachability.isReachable() else {
-            return Response.noInternet()
-        }
-        self.request = request
-        self.logRequest()
-        self.cancel()
-
-        let session = self.configuredSession(applyCache: true)
-        defer {
-            session.finishTasksAndInvalidate()
-        }
-
-        if Task.isCancelled {
-            self.logRequestError(message: "Request cancelled before execution.")
-            return Response.cancelled()
-        }
-
         do {
-            let (data, urlResponse) = try await session.data(for: request)
+            try self.preChecks()
+            let request = try self.buildRequest()
+            let session = try self.prepareSession(for: request, applyCache: true)
+            defer {
+                session.finishTasksAndInvalidate()
+            }
+
+            let operation = Task { try await session.data(for: request) }
+            self.cancelInFlight = { operation.cancel() }
+            defer {
+                self.cancelInFlight = nil
+            }
+
+            let (data, urlResponse) = try await withTaskCancellationHandler {
+                try await operation.value
+            } onCancel: {
+                operation.cancel()
+            }
             let response = Response(
                 successData: data,
                 response: urlResponse,
@@ -194,16 +239,14 @@ public class Request: Selfie {
             )
             self.logIfVerbose(response)
             return response
+        } catch let buildError as RequestBuildError {
+            return self.response(for: buildError)
         } catch is CancellationError {
             self.logRequestError(message: "Request cancelled during execution.")
             return Response.cancelled()
         } catch {
             self.logRequestError(message: error.localizedDescription)
-            return Response(
-                error: error,
-                standardType: self.standardType,
-                networkLogManager: self.networkLogManager
-            )
+            return Response(error: error)
         }
     }
 
@@ -237,82 +280,67 @@ public class Request: Selfie {
 
     @concurrent
     public func fetch(downloadTo fileURL: URL) async -> Response {
-        guard let request = self.buildRequest() else {
-            return Response.invalidURL()
-        }
-        guard self.reachability.isReachable() else {
-            return Response.noInternet()
-        }
-        self.request = request
-        self.logRequest()
-        self.cancel()
-
-        let session = self.configuredSession(applyCache: false)
-        defer {
-            session.finishTasksAndInvalidate()
-        }
-
-        if Task.isCancelled {
-            self.logRequestError(message: "Request cancelled before execution.")
-            return Response.cancelled()
-        }
-
         do {
-            let (location, urlResponse) = try await session.download(for: request)
+            try self.preChecks()
+            let request = try self.buildRequest()
+            let session = try self.prepareSession(for: request, applyCache: false)
+            defer {
+                session.finishTasksAndInvalidate()
+            }
+
+            let operation = Task { try await session.download(for: request) }
+            self.cancelInFlight = { operation.cancel() }
+            defer {
+                self.cancelInFlight = nil
+            }
+
+            let (location, urlResponse) = try await withTaskCancellationHandler {
+                try await operation.value
+            } onCancel: {
+                operation.cancel()
+            }
             let response = Response(
                 successData: nil,
                 response: urlResponse,
                 standardType: .basic,
                 networkLogManager: self.networkLogManager
             )
-
             try self.replaceDownloadedFile(at: location, destination: fileURL)
             response.statusCode = 200
-
             self.logIfVerbose(response)
             return response
+        } catch let buildError as RequestBuildError {
+            return self.response(for: buildError)
         } catch is CancellationError {
             self.logRequestError(message: "Request cancelled during execution.")
             return Response.cancelled()
         } catch {
             self.logRequestError(message: error.localizedDescription)
-            return Response(
-                error: error,
-                standardType: .basic,
-                networkLogManager: self.networkLogManager
-            )
+            return Response(error: error)
         }
     }
 
     @concurrent
     public func upload(files: [FileUploadData], params: [String: Any]) async -> Response {
-        guard var request = self.buildRequest(), let boundary = self.generateBoundary() else {
-            return Response.invalidURL()
-        }
-        guard self.reachability.isReachable() else {
-            return Response.noInternet()
-        }
-
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        let bodyData = self.buildUploadData(files: files, params: params, boundary: boundary)
-        var requestForLog = request
-        requestForLog.httpBody = bodyData
-        self.request = requestForLog
-        self.logRequest()
-        self.cancel()
-
-        let session = self.configuredSession(applyCache: false)
-        defer {
-            session.finishTasksAndInvalidate()
-        }
-
-        if Task.isCancelled {
-            self.logRequestError(message: "Request cancelled before execution.")
-            return Response.cancelled()
-        }
-
         do {
-            let (data, urlResponse) = try await session.upload(for: request, from: bodyData)
+            try self.preChecks()
+            let (request, bodyData) = try self.buildUploadRequest(files: files, params: params)
+            let session = try self.prepareSession(for: request, bodyForLog: bodyData, applyCache: false)
+            defer {
+                session.finishTasksAndInvalidate()
+            }
+
+            let operation = Task { try await session.upload(for: request, from: bodyData) }
+            self.cancelInFlight = { operation.cancel() }
+            defer {
+                self.cancelInFlight = nil
+            }
+
+            let (data, urlResponse) = try await withTaskCancellationHandler {
+                try await operation.value
+            } onCancel: {
+                operation.cancel()
+            }
             let response = Response(
                 successData: data,
                 response: urlResponse,
@@ -321,21 +349,20 @@ public class Request: Selfie {
             )
             self.logIfVerbose(response)
             return response
+        } catch let buildError as RequestBuildError {
+            return self.response(for: buildError)
         } catch is CancellationError {
             self.logRequestError(message: "Request cancelled during execution.")
             return Response.cancelled()
         } catch {
             self.logRequestError(message: error.localizedDescription)
-            return Response(
-                error: error,
-                standardType: self.standardType,
-                networkLogManager: self.networkLogManager
-            )
+            return Response(error: error)
         }
     }
 
 	public func cancel() {
-		self.task?.cancel()
+        self.cancelInFlight?()
+        self.cancelInFlight = nil
 	}
 	
 	
@@ -376,6 +403,12 @@ public class Request: Selfie {
         self.networkLogManager.log(message, info: self.logInfo)
     }
 
+    private func preChecks() throws {
+        guard self.reachability.isReachable() else {
+            throw RequestBuildError.noInternet
+        }
+    }
+
     private func payloadDataForDecoding(from response: Response) -> Data? {
         switch self.standardType {
         case .gigigo:
@@ -385,54 +418,143 @@ public class Request: Selfie {
         }
     }
 
+    private func response(for buildError: RequestBuildError) -> Response {
+        switch buildError {
+        case .invalidURL:
+            return Response.invalidURL()
+        case .bodyEncodingFailed:
+            let response = Response.cannotEncodeContentData()
+            self.logRequestError(message: response.error?.localizedDescription ?? "Cannot encode request body.")
+            return response
+        case .noInternet:
+            return Response.noInternet()
+        case .cancelledBeforeExecution:
+            return Response.cancelled()
+        }
+    }
+
     private func replaceDownloadedFile(at sourceURL: URL, destination destinationURL: URL) throws {
         if FileManager.default.fileExists(atPath: destinationURL.path) {
             try FileManager.default.removeItem(at: destinationURL)
         }
         try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
     }
+
+    private func prepareSession(
+        for request: URLRequest,
+        bodyForLog: Data? = nil,
+        applyCache: Bool
+    ) throws -> URLSession {
+        var requestForLog = request
+        if let bodyForLog {
+            requestForLog.httpBody = bodyForLog
+        }
+        self.request = requestForLog
+        self.logRequest()
+        self.cancel()
+
+        let session = self.configuredSession(applyCache: applyCache)
+        if Task.isCancelled {
+            self.logRequestError(message: "Request cancelled before execution.")
+            throw RequestBuildError.cancelledBeforeExecution
+        }
+        return session
+    }
+
+    private func buildUploadRequest(
+        files: [FileUploadData],
+        params: [String: Any]
+    ) throws -> (request: URLRequest, bodyData: Data) {
+        guard let boundary = self.generateBoundary() else {
+            throw RequestBuildError.invalidURL
+        }
+
+        var request = try self.buildRequest()
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        let bodyData = self.buildUploadData(files: files, params: params, boundary: boundary)
+        return (request, bodyData)
+    }
 	
-	fileprivate func buildRequest() -> URLRequest? {
-        var finalURL: URL?
+    fileprivate func buildRequest() throws -> URLRequest {
+        let url = try self.composeURL()
+        var request = self.composeBaseRequest(url: url)
+        try self.applyBodyAndContentTypeIfNeeded(to: &request)
+        return request
+    }
 
-        // Compose URL
-        if let urlString = self.buildURL() {
-            finalURL = addParams(to: URLComponents(string: urlString))
+    private func composeURL() throws -> URL {
+        guard let urlString = self.buildURL(), let url = self.addParams(to: URLComponents(string: urlString)) else {
+            self.logInvalidURLBuildError()
+            throw RequestBuildError.invalidURL
         }
-        
-        guard let url = finalURL else { 
-            if self.verbose {
-                let error = "not a valid URL"
-                self.networkLogManager.log(error, info: self.logInfo)
-            }
-            return nil
+        return url
+    }
+
+    private func composeBaseRequest(url: URL) -> URLRequest {
+        var request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: self.timeout)
+        request.httpMethod = self.method.rawValue
+        request.allHTTPHeaderFields = self.headers
+        self.addAcceptHeaderIfNeeded(to: &request)
+        return request
+    }
+
+    private func applyBodyAndContentTypeIfNeeded(to request: inout URLRequest) throws {
+        guard self.method != .get else {
+            return
         }
 
-        // Compose request
-		var request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: self.timeout)
-		request.httpMethod = self.method.rawValue
-		request.allHTTPHeaderFields = self.headers
+        request.httpBody = try self.encodedBodyData()
+        self.addContentTypeHeaderIfNeeded(to: &request)
+    }
+
+    private func encodedBodyData() throws -> Data? {
+        try self.encodedBodyDataFromBodyParamsArray()
+            ?? self.encodedBodyDataFromBodyParams()
+            ?? self.encodedBodyDataFromEncodableProvider()
+    }
+
+    private func encodedBodyDataFromBodyParamsArray() throws -> Data? {
+        guard let bodyParamsArray else { return nil }
+        guard let bodyData = JSON(from: bodyParamsArray).toData() else {
+            throw RequestBuildError.bodyEncodingFailed
+        }
+        return bodyData
+    }
+
+    private func encodedBodyDataFromBodyParams() throws -> Data? {
+        guard let bodyParams else { return nil }
+        guard let bodyData = JSON(from: bodyParams).toData() else {
+            throw RequestBuildError.bodyEncodingFailed
+        }
+        return bodyData
+    }
+
+    private func encodedBodyDataFromEncodableProvider() throws -> Data? {
+        guard self.encodableBodyProvider != nil else { return nil }
+        guard let bodyData = try? self.encodableBodyProvider?() else {
+            throw RequestBuildError.bodyEncodingFailed
+        }
+        return bodyData
+    }
+
+    private func addAcceptHeaderIfNeeded(to request: inout URLRequest) {
         if request.allHTTPHeaderFields?.keys.contains(where: { $0.caseInsensitiveCompare("Accept") == .orderedSame }) != true {
             request.addValue("application/json", forHTTPHeaderField: "Accept")
         }
-		
-		// Set body is not GET
-		if self.method != .get {
-            if let bodyParamsArray = self.bodyParamsArray {
-                request.httpBody = JSON(from: bodyParamsArray).toData()
-            } else if let body = self.bodyParams {
-                request.httpBody = JSON(from: body).toData()
-            }
-			
-			// Add Content-Type if it wasn't set
-			if request.allHTTPHeaderFields?.keys.contains(where: { $0.caseInsensitiveCompare("Content-Type") == .orderedSame }) != true {
-				request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-			}
-		}
-		
-		return request
-	}
-	
+    }
+
+    private func addContentTypeHeaderIfNeeded(to request: inout URLRequest) {
+        if request.allHTTPHeaderFields?.keys.contains(where: { $0.caseInsensitiveCompare("Content-Type") == .orderedSame }) != true {
+            request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+    }
+
+    private func logInvalidURLBuildError() {
+        guard self.verbose else { return }
+        self.networkLogManager.log("not a valid URL", info: self.logInfo)
+    }
+
     fileprivate func addParams(to urlComponents: URLComponents?) -> URL? {
         guard var urlComponents = urlComponents else { return nil }
         
