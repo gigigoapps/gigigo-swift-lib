@@ -103,6 +103,25 @@ do {
 }
 ```
 
+### Void fetch (no response payload expected)
+
+```swift
+let request = Request(
+    method: .post,
+    baseUrl: "https://api.example.com",
+    endpoint: "/v1/logout"
+)
+
+do {
+    try await request.fetchVoid()
+    print("Request completed successfully")
+} catch {
+    print("Request failed: \(error)")
+}
+```
+
+`fetchVoid()` throws the underlying request/response error when available. If the request fails without an underlying error, it throws a fallback `NSError` with `kGIGNetworkErrorDomain` and the response status code.
+
 ### Download to file
 
 ```swift

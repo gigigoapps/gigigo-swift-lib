@@ -279,6 +279,24 @@ public class Request: Selfie {
     }
 
     @concurrent
+    public func fetchVoid() async throws {
+        let response = await self.fetch()
+
+        guard response.status == .success else {
+            if let error = response.error {
+                throw error
+            }
+
+            let fallbackError = NSError(
+                domain: kGIGNetworkErrorDomain,
+                code: response.statusCode,
+                message: "Request failed with status \(response.status)"
+            )
+            throw fallbackError
+        }
+    }
+
+    @concurrent
     public func fetch(downloadTo fileURL: URL) async -> Response {
         do {
             try self.preChecks()
