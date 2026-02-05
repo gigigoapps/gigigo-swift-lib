@@ -2,6 +2,14 @@ import Foundation
 import Testing
 @testable import GIGLibrary
 
+private final class SendableRequestBox: @unchecked Sendable {
+    let request: Request
+
+    init(_ request: Request) {
+        self.request = request
+    }
+}
+
 @Suite(.serialized)
 struct SwiftNetworkIntegrationTests {
     @Test("Given a request and the success fixture, when fetch is called, then response matches fixture success")
@@ -469,6 +477,149 @@ struct SwiftNetworkIntegrationTests {
         #expect(response.error?.code == URLError.cancelled.rawValue)
         #expect(response.statusCode == URLError.cancelled.rawValue)
         #expect(didReceiveRequest == false)
+    }
+
+    @Test("Given an in-flight fetch, when cancel is called, then it returns a cancelled response")
+    func fetchReturnsCancelledWhenRequestIsCancelled() async {
+        // Given
+        MockURLProtocol.respond(
+            path: "/cancel-in-flight",
+            statusCode: 200,
+            data: Data("ok".utf8),
+            delay: 0.3
+        )
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/cancel-in-flight"
+        )
+        let requestBox = SendableRequestBox(request)
+
+        // When
+        let task = Task {
+            await requestBox.request.fetch()
+        }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        requestBox.request.cancel()
+        let response = await task.value
+
+        // Then
+        #expect(response.error?.code == URLError.cancelled.rawValue)
+        #expect(response.statusCode == URLError.cancelled.rawValue)
+    }
+
+    @Test("Given consecutive fetch calls, when second starts, then first is cancelled")
+    func fetchCancelsPreviousRequestWhenCalledAgain() async {
+        // Given
+        MockURLProtocol.respond(
+            path: "/cancel-previous",
+            statusCode: 200,
+            data: Data("ok".utf8),
+            delay: 0.3
+        )
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/cancel-previous"
+        )
+        let requestBox = SendableRequestBox(request)
+
+        // When
+        let firstTask = Task {
+            await requestBox.request.fetch()
+        }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        let secondTask = Task {
+            await requestBox.request.fetch()
+        }
+        let firstResponse = await firstTask.value
+        let secondResponse = await secondTask.value
+
+        // Then
+        #expect(firstResponse.error?.code == URLError.cancelled.rawValue)
+        #expect(firstResponse.statusCode == URLError.cancelled.rawValue)
+        #expect(secondResponse.status == .success)
+    }
+
+    @Test("Given a completed fetch, when cancel is called, then it does not affect the response")
+    func fetchCancelAfterCompletionDoesNotChangeResponse() async {
+        // Given
+        MockURLProtocol.respond(path: "/cancel-after", data: Data("ok".utf8))
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/cancel-after"
+        )
+
+        // When
+        let response = await request.fetch()
+        request.cancel()
+
+        // Then
+        #expect(response.status == .success)
+        #expect(response.error == nil)
+    }
+
+    @Test("Given an in-flight download, when cancel is called, then it returns a cancelled response")
+    func fetchDownloadReturnsCancelledWhenRequestIsCancelled() async {
+        // Given
+        let destinationURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        MockURLProtocol.respond(
+            path: "/download-cancel",
+            statusCode: 200,
+            headers: ["Content-Type": "application/octet-stream"],
+            data: Data("file".utf8),
+            delay: 0.3
+        )
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/download-cancel"
+        )
+        let requestBox = SendableRequestBox(request)
+
+        // When
+        let task = Task {
+            await requestBox.request.fetch(downloadTo: destinationURL)
+        }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        requestBox.request.cancel()
+        let response = await task.value
+
+        // Then
+        #expect(response.error?.code == URLError.cancelled.rawValue)
+        #expect(response.statusCode == URLError.cancelled.rawValue)
+    }
+
+    @Test("Given an in-flight upload, when cancel is called, then it returns a cancelled response")
+    func uploadReturnsCancelledWhenRequestIsCancelled() async {
+        // Given
+        MockURLProtocol.respond(
+            path: "/upload-cancel",
+            statusCode: 200,
+            data: Data("ok".utf8),
+            delay: 0.3
+        )
+        let request = Request.testRequest(
+            method: .post,
+            baseUrl: "https://example.com",
+            endpoint: "/upload-cancel"
+        )
+        let requestBox = SendableRequestBox(request)
+        let fileData = FileUploadData(
+            data: Data("file".utf8),
+            mimeType: "text/plain",
+            filename: "file.txt",
+            name: "payload"
+        )
+
+        // When
+        let task = Task {
+            await requestBox.request.upload(files: [fileData], params: ["title": "Sample"])
+        }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        requestBox.request.cancel()
+        let response = await task.value
+
+        // Then
+        #expect(response.error?.code == URLError.cancelled.rawValue)
+        #expect(response.statusCode == URLError.cancelled.rawValue)
     }
 
     @Test("Given reachability is offline, when upload is called, then it returns no-internet without sending the request")

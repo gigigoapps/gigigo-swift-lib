@@ -120,7 +120,13 @@ public class Response: Selfie, @unchecked Sendable {
         let response = Response(error: error)
         return response
     }
-	
+
+    class func cannotEncodeContentData() -> Response {
+        let error = URLError(.cannotEncodeContentData)
+        let response = Response(error: error)
+        return response
+    }
+		
     func logResponse() {
         self.logResponse(nil)
     }
