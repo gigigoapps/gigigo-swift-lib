@@ -6,8 +6,10 @@ public struct LabelStyle {
     
     /// Its possible to set attributted text and ViewStyle to Label individually,
     /// or use this init.
-    public init(textStyle: TextStyle,
-                viewStyle: ViewStyle? = nil) {
+    public init(
+        textStyle: TextStyle,
+        viewStyle: ViewStyle? = nil
+    ) {
         self.textStyle = textStyle
         self.viewStyle = viewStyle
     }

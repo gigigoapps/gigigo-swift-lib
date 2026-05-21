@@ -40,11 +40,11 @@ public extension KeyboardAdaptable where Self: UIViewController {
 	}
 	
 	// MARK: - Optional Public Methods
-	func keyboardWillShow() {}
-	func keyboardDidShow() {}
-	func keyboardWillHide() {}
-	func keyboardDidHide() {}
-    func keyboardChangeFrame(_ size: CGSize) {}
+	func keyboardWillShow() { /* optional override */ }
+	func keyboardDidShow() { /* optional override */ }
+	func keyboardWillHide() { /* optional override */ }
+	func keyboardDidHide() { /* optional override */ }
+    func keyboardChangeFrame(_ size: CGSize) { /* optional override */ }
 	
 	
 	// MARK: - Private Helpers

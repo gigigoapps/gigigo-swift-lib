@@ -616,7 +616,11 @@ public class Request: Selfie {
         guard let toString = String(data: Data(sequenceOfRanges), encoding: .utf8) else { return nil }
         
         var randomString = ""
-        for _ in 0..<20 { randomString += String(toString.randomElement()!) }
+        // toString is non-empty by construction (3 ASCII ranges joined)
+        for _ in 0..<20 {
+            // swiftlint:disable:next force_unwrapping
+            randomString += String(toString.randomElement()!)
+        }
         
         
         return randomString + "\(Int(Date.timeIntervalSinceReferenceDate))"

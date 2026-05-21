@@ -14,16 +14,18 @@ public struct ViewStyle {
     
     /// If set dottedBorders, someBorders not apply
     /// If set dottedBorders, someBorders not apply
-    public init(borderColor: UIColor = .clear,
-                borderWidth: CGFloat = 0.0,
-                someBorders: [Border] = [],
-                dottedBorders: Bool = false,
-                shadowColor: UIColor = .clear,
-                shadowOffset: CGSize = CGSize.zero,
-                shadowOpacity: Float = 0.0,
-                shadowRadius: CGFloat = 0.0,
-                cornerRadius: CGFloat? = nil,
-                backgroundColor: UIColor = .white) {
+    public init(
+        borderColor: UIColor = .clear,
+        borderWidth: CGFloat = 0.0,
+        someBorders: [Border] = [],
+        dottedBorders: Bool = false,
+        shadowColor: UIColor = .clear,
+        shadowOffset: CGSize = CGSize.zero,
+        shadowOpacity: Float = 0.0,
+        shadowRadius: CGFloat = 0.0,
+        cornerRadius: CGFloat? = nil,
+        backgroundColor: UIColor = .white
+    ) {
         
         self.borderColor = borderColor
         self.borderWidth = borderWidth

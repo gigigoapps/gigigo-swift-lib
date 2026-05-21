@@ -17,7 +17,7 @@ public protocol GIGScannerDelegate: AnyObject {
 open class GIGScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
 	
 	
-	var delegate: GIGScannerDelegate?
+	weak var delegate: GIGScannerDelegate?
 	fileprivate let session: AVCaptureSession
 	fileprivate let device: AVCaptureDevice
 	fileprivate let output: AVCaptureMetadataOutput
@@ -30,7 +30,8 @@ open class GIGScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 	required public init?(coder aDecoder: NSCoder) {
 		
 		self.session = AVCaptureSession()
-		self.device = AVCaptureDevice.default(for: AVMediaType.video)!
+		guard let device = AVCaptureDevice.default(for: AVMediaType.video) else { return nil }
+		self.device = device
 		self.output = AVCaptureMetadataOutput()
 		
 		do {
@@ -43,10 +44,11 @@ open class GIGScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 	}
 	
 	deinit {
-		
+		// no-op
 	}
 	
 	override open func viewDidLoad() {
+		super.viewDidLoad()
 		self.setupScannerWithProperties()
 	}
 	
@@ -135,9 +137,9 @@ open class GIGScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 	// MARK: - PRIVATE
 	
 	func setupScannerWithProperties() {
-		
-		if self.session.canAddInput(self.input!) {
-			self.session.addInput(self.input!)
+
+		if let input = self.input, self.session.canAddInput(input) {
+			self.session.addInput(input)
 		}
 		self.session.addOutput(self.output)
 		self.output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
@@ -148,16 +150,26 @@ open class GIGScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 	
 	func setupOutputWithDefaultValues() -> [AVMetadataObject.ObjectType] {
 		
-		return [AVMetadataObject.ObjectType.upce, AVMetadataObject.ObjectType.code39, AVMetadataObject.ObjectType.code39Mod43,
-						AVMetadataObject.ObjectType.ean13, AVMetadataObject.ObjectType.ean8, AVMetadataObject.ObjectType.code93, AVMetadataObject.ObjectType.code128,
-						AVMetadataObject.ObjectType.pdf417, AVMetadataObject.ObjectType.aztec, AVMetadataObject.ObjectType.qr]
+		return [
+			AVMetadataObject.ObjectType.upce,
+			AVMetadataObject.ObjectType.code39,
+			AVMetadataObject.ObjectType.code39Mod43,
+			AVMetadataObject.ObjectType.ean13,
+			AVMetadataObject.ObjectType.ean8,
+			AVMetadataObject.ObjectType.code93,
+			AVMetadataObject.ObjectType.code128,
+			AVMetadataObject.ObjectType.pdf417,
+			AVMetadataObject.ObjectType.aztec,
+			AVMetadataObject.ObjectType.qr
+		]
 	}
 	
 	func setupPreviewLayer() {
-		self.preview = AVCaptureVideoPreviewLayer(session: self.session)
-		self.preview?.videoGravity = AVLayerVideoGravity.resizeAspectFill
-		self.preview?.frame = self.view.bounds
-		self.view.layer.addSublayer(self.preview!)
+		let preview = AVCaptureVideoPreviewLayer(session: self.session)
+		preview.videoGravity = AVLayerVideoGravity.resizeAspectFill
+		preview.frame = self.view.bounds
+		self.preview = preview
+		self.view.layer.addSublayer(preview)
 	}
 	
 	

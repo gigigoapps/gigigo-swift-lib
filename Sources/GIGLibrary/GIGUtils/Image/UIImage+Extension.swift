@@ -105,13 +105,16 @@ extension UIImage {
     
     // MARK: - Private Helpers
     
-    internal class func delayForImageAtIndex(_ index: Int, source: CGImageSource!) -> Double {
+    internal class func delayForImageAtIndex(_ index: Int, source: CGImageSource) -> Double {
         var delay = 0.1
         // Get dictionaries
         let cfProperties = CGImageSourceCopyPropertiesAtIndex(source, index, nil)
         let gifPropertiesPointer = UnsafeMutablePointer<UnsafeRawPointer?>.allocate(capacity: 0)
-        if CFDictionaryGetValueIfPresent(cfProperties, Unmanaged.passUnretained(kCGImagePropertyGIFDictionary).toOpaque(),
-                                         gifPropertiesPointer) == false {
+        if CFDictionaryGetValueIfPresent(
+            cfProperties,
+            Unmanaged.passUnretained(kCGImagePropertyGIFDictionary).toOpaque(),
+            gifPropertiesPointer
+        ) == false {
             return delay
         }
         let gifProperties: CFDictionary = unsafeBitCast(gifPropertiesPointer.pointee, to: CFDictionary.self)
@@ -135,34 +138,20 @@ extension UIImage {
     }
     
     internal class func gcdForPair(_ aVar: Int?, _ bVar: Int?) -> Int {
-        var a = aVar
-        var b = bVar
-        // Check if one of them is nil
-        if b == nil || a == nil {
-            if b != nil {
-                return b!
-            }
-            if a != nil {
-                return a!
-            }
-            return 0
+        // If either is nil, return the other (or 0 if both are nil)
+        guard var a = aVar else { return bVar ?? 0 }
+        guard var b = bVar else { return a }
+        // Swap so a >= b for modulo
+        if a < b {
+            swap(&a, &b)
         }
-        // Swap for modulo
-        if a! < b! {
-            let c = a
-            a = b
-            b = c
-        }
-        // Get greatest common divisor
-        var rest: Int
-        while true {
-            rest = a! % b!
-            if rest == 0 {
-                return b! // Found it
-            }
+        // Get greatest common divisor (Euclidean algorithm)
+        while b != 0 {
+            let rest = a % b
             a = b
             b = rest
         }
+        return a
     }
     
     internal class func gcdForArray(_ array: [Int]) -> Int {

@@ -7,11 +7,13 @@ public struct TextFieldStyle {
     let borderStyle: UITextField.BorderStyle
     let viewStyle: ViewStyle?
     
-    public init(font: UIFont,
-                tintColor: UIColor = .blue,
-                textColor: UIColor = .black,
-                borderStyle: UITextField.BorderStyle = .line,
-                viewStyle: ViewStyle? = nil) {
+    public init(
+        font: UIFont,
+        tintColor: UIColor = .blue,
+        textColor: UIColor = .black,
+        borderStyle: UITextField.BorderStyle = .line,
+        viewStyle: ViewStyle? = nil
+    ) {
         self.font = font
         self.tintColor = tintColor
         self.textColor = textColor

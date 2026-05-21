@@ -33,7 +33,7 @@ open class AlertController: NSObject, AlertInterface {
     open func addDefaultButton(_ title: String, usingAction: ((String) -> Void)?) {
         let action = UIAlertAction(title: title, style: .default) { action in
 			guard let usingAction else { return }
-            usingAction(action.title!)
+            usingAction(action.title ?? "")
         }
         self.alert.addAction(action)
     }
@@ -41,7 +41,7 @@ open class AlertController: NSObject, AlertInterface {
     open func addCancelButton(_ title: String, usingAction: ((String) -> Void)?) {
         let action = UIAlertAction(title: title, style: .cancel) { action in
 			guard let usingAction else { return }
-            usingAction(action.title!)
+            usingAction(action.title ?? "")
         }
         self.alert.addAction(action)
     }
@@ -49,7 +49,7 @@ open class AlertController: NSObject, AlertInterface {
     open func addDestructiveButton(_ title: String, usingAction: ((String) -> Void)?) {
         let action = UIAlertAction(title: title, style: .destructive) { action in
 			guard let usingAction else { return }
-            usingAction(action.title!)
+            usingAction(action.title ?? "")
         }
         self.alert.addAction(action)
     }

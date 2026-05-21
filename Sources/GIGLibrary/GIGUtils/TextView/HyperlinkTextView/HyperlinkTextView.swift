@@ -80,7 +80,8 @@ open class HyperlinkTextView: UITextView {
         return styledAttributedText
     }
     
-    @objc private func handleLinkTapGestureRecognizer(_ recognizer: UITapGestureRecognizer) {
+    @objc
+    private func handleLinkTapGestureRecognizer(_ recognizer: UITapGestureRecognizer) {
         
         let tapLocation = recognizer.location(in: self)
         
@@ -134,7 +135,9 @@ open class HyperlinkTextView: UITextView {
             let htmlFontData = String(format: "<span style=\"font-family: '-apple-system', '\(font.fontName)'; font-size: \(font.pointSize)\">%@</span>", self.attributedText.string).data(using: .unicode, allowLossyConversion: false) else { return }
         let attributedText = try? NSAttributedString(
             data: htmlFontData,
-            options: [NSAttributedString.DocumentReadingOptionKey.documentType: NSAttributedString.DocumentType.html], documentAttributes: nil)
+            options: [NSAttributedString.DocumentReadingOptionKey.documentType: NSAttributedString.DocumentType.html],
+            documentAttributes: nil
+        )
         self.attributedText = attributedText
     }
 }
