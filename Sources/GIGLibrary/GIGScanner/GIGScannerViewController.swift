@@ -128,7 +128,7 @@ open class GIGScannerViewController: UIViewController, AVCaptureMetadataOutputOb
 			self.device.exposurePointOfInterest = focusPoint
 			self.device.exposureMode = AVCaptureDevice.ExposureMode.continuousAutoExposure
 		} catch let error as NSError {
-			print(error.localizedDescription)
+			LogError(error)
 		}
 	}
 	

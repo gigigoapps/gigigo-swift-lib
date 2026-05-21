@@ -15,7 +15,7 @@ protocol NetworkLogManaging {
 struct DefaultNetworkLogManager: NetworkLogManaging {
     func log(_ message: String, info: RequestLogInfo?) {
         guard let info else {
-            print(message)
+            gigLogDebug(message)
             return
         }
 
