@@ -222,7 +222,7 @@ extension Data {
                 ],
                 documentAttributes: nil)
         } catch let error as NSError {
-            print(error.localizedDescription)
+            LogError(error)
         }
         return nil
     }
