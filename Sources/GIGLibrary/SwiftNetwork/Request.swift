@@ -52,7 +52,7 @@ extension URLError.Code {
     static var cannotEncodeContentData: URLError.Code { .cannotParseResponse }
 }
 
-public class Request: Selfie {
+public class Request: Selfie, @unchecked Sendable {
 	
     public var method: HTTPMethod
     public var baseURL: String
