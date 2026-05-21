@@ -155,7 +155,7 @@ public class LogManager: @unchecked Sendable {
     
     public var currentModules: [LoggableModule.Type] {
         return self.queue.sync {
-            return self.modules.map({ $0 })
+            return self.modules.map(\.self)
         }
     }
     

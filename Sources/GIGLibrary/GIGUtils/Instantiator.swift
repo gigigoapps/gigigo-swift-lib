@@ -42,7 +42,7 @@ public extension Instantiable {
         let storyboard = UIStoryboard(name: Self.storyboard, bundle: bundle)
         var viewController: UIViewController?
         
-        if Self.identifier.count > 0 {
+        if !Self.identifier.isEmpty {
             viewController = storyboard.instantiateViewController(withIdentifier: identifier)
         } else {
             guard let vc = storyboard.instantiateInitialViewController() else {

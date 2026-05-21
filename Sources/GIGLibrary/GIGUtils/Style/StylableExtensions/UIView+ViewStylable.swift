@@ -16,11 +16,11 @@ extension UIView: ViewStylable {
         // All borders
         if style.dottedBorders {
             self.addDottedBorder(weight: style.borderWidth, color: style.borderColor)
-        } else if style.someBorders.count == 0 {
+        } else if style.someBorders.isEmpty {
             self.addBorder(weight: style.borderWidth, color: style.borderColor)
         }
         // Some borders - not dotted border
-        else if style.someBorders.count > 0 {
+        else if !style.someBorders.isEmpty {
             style.someBorders.forEach {
                 self.addSomeBorders($0, weight: style.borderWidth, color: style.borderColor)
             }

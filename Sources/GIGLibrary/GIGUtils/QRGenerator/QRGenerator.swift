@@ -15,9 +15,8 @@ open class QR {
     
 	open class func generate(_ string: String) -> UIImage? {
 		guard let outputImage: CGImage = self.generate(string) else { return nil }
-		let image = UIImage(cgImage: outputImage)
 		
-		return image
+		return UIImage(cgImage: outputImage)
 	}
 	
 	open class func generate(_ string: String, onView: UIImageView) {

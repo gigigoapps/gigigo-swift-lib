@@ -114,26 +114,22 @@ public class Response: Selfie, @unchecked Sendable {
     
     class func noInternet() -> Response {
         let error = NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet, message: "No Internet")
-        let response = Response(data: nil, response: nil, error: error)
-        return response
+        return Response(data: nil, response: nil, error: error)
     }
 
     class func invalidURL() -> Response {
         let error = URLError(.badURL)
-        let response = Response(error: error)
-        return response
+        return Response(error: error)
     }
 
     class func cancelled() -> Response {
         let error = URLError(.cancelled)
-        let response = Response(error: error)
-        return response
+        return Response(error: error)
     }
 
     class func cannotEncodeContentData() -> Response {
         let error = URLError(.cannotEncodeContentData)
-        let response = Response(error: error)
-        return response
+        return Response(error: error)
     }
 		
     func logResponse() {
@@ -148,7 +144,7 @@ public class Response: Selfie, @unchecked Sendable {
     // MARK: - Private Helpers
     
     private func isGifData() -> Bool {
-        guard let url = url else {
+        guard let url else {
             return false
         }
         return url.pathExtension == "gif"
@@ -214,11 +210,11 @@ public class Response: Selfie, @unchecked Sendable {
 	private func parseStatus(json: JSON) -> Bool {
 		if let statusBool = json["status"]?.toBool() {
 			return statusBool
-		} else if let statusString = json["status"]?.toString() {
-			return statusString == "OK"
-		} else {
-			return false
 		}
+		if let statusString = json["status"]?.toString() {
+			return statusString == "OK"
+		}
+			return false
 	}
 	
 	private func parseError(json: JSON) -> ResponseStatus {

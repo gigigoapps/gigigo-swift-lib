@@ -122,7 +122,7 @@ open class HyperlinkTextView: UITextView {
         let attributedSubstring = self.attributedText.attributedSubstring(from: offsetRange)
         if let hyperlinkURL = attributedSubstring.attribute(NSAttributedString.Key.link, at: 0, effectiveRange: nil) as? NSURL,
             let hyperlink = hyperlinkURL.absoluteString,
-            let URL = URL.init(string: hyperlink) {
+            let URL = URL(string: hyperlink) {
             self.hyperlinkDelegate?.didTapOnHyperlink(URL: URL)
         }
         

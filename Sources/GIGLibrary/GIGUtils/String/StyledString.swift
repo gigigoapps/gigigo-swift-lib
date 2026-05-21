@@ -238,7 +238,7 @@ public struct StyledString {
     
     public func toAttributedString(defaultFont font: UIFont) -> NSAttributedString {
         
-        let result = self.styledStringFractions.reduce(NSAttributedString()) { (currentAttributedString, singleStyledString) -> NSAttributedString in
+        return self.styledStringFractions.reduce(NSAttributedString()) { (currentAttributedString, singleStyledString) -> NSAttributedString in
             
             let attributedString = self.attributedStringFrom(styledStringFraction: singleStyledString, font: font)
             
@@ -247,7 +247,6 @@ public struct StyledString {
             
             return finalAttributedString
         }
-        return result
     }
     
     // MARK: PRIVATE
@@ -260,7 +259,7 @@ public struct StyledString {
         var currentFont = font
         
         let tempAttributedString = NSMutableAttributedString(string: currentString)
-        let attributedString = currentStyle.reduce(tempAttributedString) { (string, style) -> NSMutableAttributedString in
+        return currentStyle.reduce(tempAttributedString) { (string, style) -> NSMutableAttributedString in
             
             let key = style.key()
             let value = style.value(forFont: currentFont)
@@ -272,7 +271,6 @@ public struct StyledString {
             }
             return string
         }
-        return attributedString
     }
 }
 
@@ -356,15 +354,13 @@ public enum Style {
         case .bold:
             if let fontDescriptor = font.fontDescriptor.withSymbolicTraits(.traitBold) {
                 return UIFont(descriptor: fontDescriptor, size: 0.0)
-            } else {
-                return font
             }
+            return font
         case .italic:
             if let fontDescriptor = font.fontDescriptor.withSymbolicTraits(.traitItalic) {
                 return UIFont(descriptor: fontDescriptor, size: 0.0)
-            } else {
-                return font
             }
+            return font
         case .color(let color):
             return color
         case .backgroundColor(let color):
@@ -372,16 +368,14 @@ public enum Style {
         case .size(let pointSize):
             if let font = UIFont(name: font.fontName, size: pointSize) {
                 return font
-            } else {
-                return UIFont.systemFont(ofSize: pointSize)
             }
+            return UIFont.systemFont(ofSize: pointSize)
         case .fontName(let fontName):
             if let font = UIFont(name: fontName, size: font.pointSize) {
                 return font
-            } else {
-                LogWarn("Could not find font with name: " + fontName)
-                return UIFont.systemFont(ofSize: font.pointSize)
             }
+            LogWarn("Could not find font with name: " + fontName)
+            return UIFont.systemFont(ofSize: font.pointSize)
         case .font(let font):
             return font
         case .underline:
@@ -499,9 +493,8 @@ extension UIColor {
         
         if includeAlpha {
             return String(format: "#%02X%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255), Int(a * 255))
-        } else {
-            return String(format: "#%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
         }
+        return String(format: "#%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
     }
 }
 

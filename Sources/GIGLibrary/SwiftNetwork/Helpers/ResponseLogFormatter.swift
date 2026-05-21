@@ -31,7 +31,7 @@ enum ResponseLogFormatter {
     }
 
     private static func logHeaders(_ headers: [AnyHashable: Any]?) -> String {
-        guard let headers = headers, !headers.isEmpty else { return "" }
+        guard let headers, !headers.isEmpty else { return "" }
 
         var log = " - HEADERS: {"
 
@@ -45,16 +45,16 @@ enum ResponseLogFormatter {
     }
 
     private static func logData(_ body: Data?) -> String {
-        guard let body = body, !body.isEmpty else {
+        guard let body, !body.isEmpty else {
             return ""
         }
 
         if let json = try? JSON.dataToJson(body) {
             return " - JSON:\n\(json)\n"
-        } else if let string = String(data: body, encoding: .utf8) {
-            return " - DATA:\n\(string)\n"
-        } else {
-            return ""
         }
+        if let string = String(data: body, encoding: .utf8) {
+            return " - DATA:\n\(string)\n"
+        }
+        return ""
     }
 }

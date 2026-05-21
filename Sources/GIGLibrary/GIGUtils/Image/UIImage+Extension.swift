@@ -141,11 +141,11 @@ extension UIImage {
         if b == nil || a == nil {
             if b != nil {
                 return b!
-            } else if a != nil {
-                return a!
-            } else {
-                return 0
             }
+            if a != nil {
+                return a!
+            }
+            return 0
         }
         // Swap for modulo
         if a! < b! {
@@ -159,10 +159,9 @@ extension UIImage {
             rest = a! % b!
             if rest == 0 {
                 return b! // Found it
-            } else {
-                a = b
-                b = rest
             }
+            a = b
+            b = rest
         }
     }
     
@@ -215,10 +214,9 @@ extension UIImage {
                 frames.append(frame)
             }
         }
-        let animation = UIImage.animatedImage(
+        return UIImage.animatedImage(
             with: frames,
             duration: Double(duration) / 1000.0)
-        return animation
     }
     
     

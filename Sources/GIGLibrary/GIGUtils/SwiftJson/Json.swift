@@ -17,12 +17,10 @@ open class JSON: Sequence, CustomStringConvertible {
 		if let data = try? JSONSerialization.data(withJSONObject: self.json, options: .prettyPrinted) as Data {
 			if let description = String(data: data, encoding: String.Encoding.utf8) {
 				return description
-			} else {
-				return String(describing: self.json)
 			}
-		} else {
-			return String(describing: self.json)
+				return String(describing: self.json)
 		}
+			return String(describing: self.json)
 	}
 	
 	
@@ -64,9 +62,8 @@ open class JSON: Sequence, CustomStringConvertible {
 	
 	open class func dataToJson(_ data: Data) throws -> JSON {
 		let jsonObject = try JSONSerialization.jsonObject(with: data, options: .allowFragments)
-		let json = JSON(from: jsonObject)
 		
-		return json
+		return JSON(from: jsonObject)
 	}
 	
 	
@@ -74,8 +71,7 @@ open class JSON: Sequence, CustomStringConvertible {
 	
 	open func toData() -> Data? {
 		do {
-			let data = try JSONSerialization.data(withJSONObject: self.json)
-			return data
+			return try JSONSerialization.data(withJSONObject: self.json)
 		} catch let error as NSError {
 			LogError(error)
 			return nil
@@ -89,7 +85,8 @@ open class JSON: Sequence, CustomStringConvertible {
 	open func toInt() -> Int? {
 		if let value = self.json as? Int {
 			return value
-		} else if let value = self.toString() {
+		}
+		if let value = self.toString() {
 			return Int(value)
 		}
 		

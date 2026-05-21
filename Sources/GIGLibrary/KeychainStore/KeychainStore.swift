@@ -225,7 +225,7 @@ open class KeychainStore {
             query[KeychainConstants.AttributeAccount] = key
 
             var (attributes, error) = self.options.attributes(key: nil, value: value)
-            if let error = error { throw error }
+            if let error { throw error }
 
             self.options.attributes.forEach { attributes.updateValue($1, forKey: $0) }
 
@@ -235,7 +235,7 @@ open class KeychainStore {
             }
         case errSecItemNotFound:
             var (attributes, error) = self.options.attributes(key: key, value: value)
-            if let error = error {
+            if let error {
                 throw error
             }
 
@@ -368,7 +368,7 @@ open class KeychainStore {
     }
 
     public func allKeys() -> [String] {
-        let allItems = type(of: self).prettify(items: self.items())
+        let allItems = Self.prettify(items: self.items())
         let filter: ([String: Any]) -> String? = { $0["key"] as? String }
 
         return allItems.compactMap(filter)
@@ -399,7 +399,7 @@ open class KeychainStore {
     }
 
     public func allItems() -> [[String: Any]] {
-        return type(of: self).prettify(items: items())
+        return Self.prettify(items: items())
     }
 
     // MARK: Private helpers
@@ -428,7 +428,7 @@ open class KeychainStore {
     }
 
     fileprivate class func prettify(items: [[String: Any]]) -> [[String: Any]] {
-        let items = items.map { attributes -> [String: Any] in
+        return items.map { attributes -> [String: Any] in
             var item = [String: Any]()
 
             item["class"] = KeychainConstants.ClassGenericPassword
@@ -463,18 +463,16 @@ open class KeychainStore {
 
             return item
         }
-        return items
     }
 
     @discardableResult
     fileprivate class func securityError(status: OSStatus) -> Error {
-        let error = Status(status: status)
-        return error
+        return Status(status: status)
     }
 
     @discardableResult
     fileprivate func securityError(status: OSStatus) -> Error {
-        return type(of: self).securityError(status: status)
+        return Self.securityError(status: status)
     }
 }
 
