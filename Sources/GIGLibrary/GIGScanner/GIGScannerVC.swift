@@ -20,6 +20,7 @@ open class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOutp
 	var captureSession: AVCaptureSession?
 	var previewLayer: AVCaptureVideoPreviewLayer?
 	var codeFrameView: UIView?
+	// swiftlint:disable:next implicitly_unwrapped_optional
 	var captureDevice: AVCaptureDevice!
 	
 	override open func viewDidLoad() {
@@ -111,7 +112,11 @@ open class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOutp
 	// MARK: - PRIVATE
 	
 	private func addPreviewLayer() {
-		self.previewLayer = AVCaptureVideoPreviewLayer(session: self.captureSession!)
+		guard let captureSession = self.captureSession else {
+			LogWarn("Capture session is nil; cannot add preview layer")
+			return
+		}
+		self.previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
 		self.previewLayer?.videoGravity = AVLayerVideoGravity.resizeAspectFill
 		self.previewLayer?.frame = self.view.bounds
 		guard let preview = self.previewLayer else {

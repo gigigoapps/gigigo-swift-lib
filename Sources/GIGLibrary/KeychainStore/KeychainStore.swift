@@ -257,9 +257,9 @@ open class KeychainStore {
 
         set {
             if let value = newValue {
-                do { try self.set(value, key: key) } catch {}
+                do { try self.set(value, key: key) } catch { /* subscript swallows errors */ }
             } else {
-                do { try self.remove(key) } catch {}
+                do { try self.remove(key) } catch { /* subscript swallows errors */ }
             }
         }
     }
@@ -281,9 +281,9 @@ open class KeychainStore {
 
         set {
             if let value = newValue {
-                do { try self.set(value, key: key) } catch {}
+                do { try self.set(value, key: key) } catch { /* subscript swallows errors */ }
             } else {
-                do { try self.remove(key) } catch {}
+                do { try self.remove(key) } catch { /* subscript swallows errors */ }
             }
         }
     }

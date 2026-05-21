@@ -183,7 +183,7 @@ public class LogManager: @unchecked Sendable {
             let settings = self.getSettingsForModuleNonSynchronized(module)
             guard settings.logLevel >= .info else { return }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
-            let className = filename.lastPathComponent.components(separatedBy: ".").first!
+            let className = filename.lastPathComponent.components(separatedBy: ".").first ?? filename.lastPathComponent
             let emoji = (settings.logStyle == .funny) ? " ⓘ" : ""
             let caller = "[Info\(emoji)] \(className)(\(line)) - \(funcname): "
             let debugMessage = "[\(moduleName)]::\(caller)::" + message
@@ -197,7 +197,7 @@ public class LogManager: @unchecked Sendable {
             let settings = self.getSettingsForModuleNonSynchronized(module)
             guard settings.logLevel >= .debug else { return }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
-            let className = filename.lastPathComponent.components(separatedBy: ".").first!
+            let className = filename.lastPathComponent.components(separatedBy: ".").first ?? filename.lastPathComponent
             let emoji = (settings.logStyle == .funny) ? " 🐛" : ""
             let caller = "[Debug\(emoji)] \(className)(\(line)) - \(funcname): "
             let debugMessage = "[\(moduleName)]::\(caller)::" + message
@@ -213,7 +213,7 @@ public class LogManager: @unchecked Sendable {
                 let err = error
                 else { return }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
-            let className = filename.lastPathComponent.components(separatedBy: ".").first!
+            let className = filename.lastPathComponent.components(separatedBy: ".").first ?? filename.lastPathComponent
             let emoji = (settings.logStyle == .funny) ? " 🔥" : ""
             let caller = "[Error\(emoji)] \(className)(\(line)) - \(funcname): \(err.localizedDescription)"
             let debugMessage = "[\(moduleName)]::\(caller)"
@@ -227,7 +227,7 @@ public class LogManager: @unchecked Sendable {
             let settings = self.getSettingsForModuleNonSynchronized(module)
             guard settings.logLevel >= .error else { return }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
-            let className = filename.lastPathComponent.components(separatedBy: ".").first!
+            let className = filename.lastPathComponent.components(separatedBy: ".").first ?? filename.lastPathComponent
             let emoji = (settings.logStyle == .funny) ? " 🔥" : ""
             let caller = "[Warn\(emoji)] \(className)(\(line)) - \(funcname): "
             let debugMessage = "[\(moduleName)]::\(caller)::" + message
@@ -239,11 +239,10 @@ public class LogManager: @unchecked Sendable {
     // PRIVATE SECTION
     
     private func getSettingsForModuleNonSynchronized(_ module: LoggableModule.Type?) -> LogManagerSettings {
-        var settings: LogManagerSettings! = self.defaultSettings
-        if let moduleUnwrap = module, let moduleSettings = self.settingsForModuleNonSynchronized(moduleUnwrap) {
-            settings = moduleSettings
+        if let module, let moduleSettings = self.settingsForModuleNonSynchronized(module) {
+            return moduleSettings
         }
-        return settings
+        return self.defaultSettings
     }
     
     private func settingsForModuleNonSynchronized(_ module: LoggableModule.Type) -> LogManagerSettings? {

@@ -11,21 +11,24 @@ import UIKit
 
 public extension UIView {
 
-    @objc func addSubviewWithAutolayout(_ childView: UIView) {
+    @objc
+    func addSubviewWithAutolayout(_ childView: UIView) {
         childView.translatesAutoresizingMaskIntoConstraints = false
         self.addSubview(childView)
         
         var constraints: [NSLayoutConstraint] = []
         constraints.append(
-            contentsOf: NSLayoutConstraint.constraints(withVisualFormat: "H:|[childView]|",
+            contentsOf: NSLayoutConstraint.constraints(
+                withVisualFormat: "H:|[childView]|",
                 options: .alignmentMask,
                 metrics: nil,
                 views: ["childView": childView]
             )
         )
-        
+
         constraints.append(
-            contentsOf: NSLayoutConstraint.constraints(withVisualFormat: "V:|[childView]|",
+            contentsOf: NSLayoutConstraint.constraints(
+                withVisualFormat: "V:|[childView]|",
                 options: .alignmentMask,
                 metrics: nil,
                 views: ["childView": childView]

@@ -10,10 +10,12 @@ public struct ButtonStyle {
     /// or use this init.
     
     /// If set backgroundImage backgroundColor from viewStyle is not apply.
-    public init(textStyle: TextStyle,
-                tintColor: UIColor? = nil,
-                viewStyle: ViewStyle? = nil,
-                backgroundImage: UIImage? = nil) {
+    public init(
+        textStyle: TextStyle,
+        tintColor: UIColor? = nil,
+        viewStyle: ViewStyle? = nil,
+        backgroundImage: UIImage? = nil
+    ) {
         self.textStyle = textStyle
         self.tintColor = tintColor
         self.viewStyle = viewStyle

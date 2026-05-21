@@ -19,14 +19,16 @@ protocol AlertInterface {
 @MainActor
 open class Alert: NSObject {
     
-    internal var interface: AlertInterface!
-    
+    internal let interface: AlertInterface
+
     internal override init() {
-        interface = AlertController()
+        self.interface = AlertController()
+        super.init()
     }
-    
+
     public init(title: String, message: String) {
-        interface = AlertController(title: title, message: message)
+        self.interface = AlertController(title: title, message: message)
+        super.init()
     }
     
     open func show() {

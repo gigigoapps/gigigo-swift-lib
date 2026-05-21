@@ -13,17 +13,17 @@ public extension Locale {
 	
 	/// Returns language + region. Example: en-US
     static func currentLanguage() -> String {
-		return self.preferredLanguages.first!
+		return self.preferredLanguages.first ?? "en"
 	}
-	
+
 	/// Returns only language. Expample: es
     static func currentLanguageCode() -> String {
-		return self.currentLanguage().components(separatedBy: "-").first!
+		return self.currentLanguage().components(separatedBy: "-").first ?? "en"
 	}
-	
+
 	/// Returns only region. Example: US
     static func currentRegionCode() -> String {
-		return self.currentLanguage().components(separatedBy: "-").last!
+		return self.currentLanguage().components(separatedBy: "-").last ?? "US"
 	}
 	
 }

@@ -76,9 +76,9 @@ public extension Date {
 	- Since: 1.1.3
 	*/
     func setHour(_ hour: Int, minutes: Int = 0, seconds: Int = 0) throws -> Date {
-		guard 0 <= hour && hour < 24		else { throw ErrorDate.invalidHour }
-		guard 0 <= minutes && minutes < 60	else { throw ErrorDate.invalidMinutes }
-		guard 0 <= seconds && seconds < 60	else { throw ErrorDate.invalidSeconds }
+		guard (0..<24).contains(hour) else { throw ErrorDate.invalidHour }
+		guard (0..<60).contains(minutes) else { throw ErrorDate.invalidMinutes }
+		guard (0..<60).contains(seconds) else { throw ErrorDate.invalidSeconds }
 		
 		let calendar = Calendar(identifier: Calendar.Identifier.gregorian)
 		var components = (calendar as NSCalendar).components(([.day, .month, .year]), from: self)
@@ -86,7 +86,10 @@ public extension Date {
 		components.minute = minutes
 		components.second = seconds
 		
-		return calendar.date(from: components)!
+		guard let result = calendar.date(from: components) else {
+			throw ErrorDate.invalidHour
+		}
+		return result
 	}
 }
 

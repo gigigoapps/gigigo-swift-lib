@@ -92,7 +92,8 @@ public class ReachabilityWrapper: ReachabilityInput, @unchecked Sendable {
     }
     
     // MARK: - Reachability Change
-    @objc func reachabilityChanged(_ notification: NSNotification) {
+    @objc
+    func reachabilityChanged(_ notification: NSNotification) {
         guard let reachability = notification.object as? Reachability else { return }
         if self.networkStatus() != self.currentStatus {
             self.currentStatus = self.networkStatus()
