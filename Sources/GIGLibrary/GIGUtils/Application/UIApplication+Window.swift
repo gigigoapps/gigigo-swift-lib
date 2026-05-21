@@ -13,14 +13,14 @@ extension UIApplication {
         let activeScenes = connectedScenes
             .filter { $0.activationState == .foregroundActive }
             .compactMap { $0 as? UIWindowScene }
-        let activeWindows = activeScenes.flatMap { $0.windows }
-        if let window = activeWindows.first(where: { $0.isKeyWindow }) ?? activeWindows.first {
+        let activeWindows = activeScenes.flatMap(\.windows)
+        if let window = activeWindows.first(where: \.isKeyWindow) ?? activeWindows.first {
             return window
         }
 
         let windows = connectedScenes
             .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-        return windows.first { $0.isKeyWindow } ?? windows.first
+            .flatMap(\.windows)
+        return windows.first(where: \.isKeyWindow) ?? windows.first
     }
 }

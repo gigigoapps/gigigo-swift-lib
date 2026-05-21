@@ -64,7 +64,7 @@ public class Request: Selfie {
     public var standardType: StandardType = .gigigo
     public var timeout: TimeInterval = 15.0
 
-    var cache: NSURLRequest.CachePolicy = NSURLRequest.CachePolicy.useProtocolCachePolicy
+    var cache = NSURLRequest.CachePolicy.useProtocolCachePolicy
 
     private var bodyParamsArray: [[String: Any]]?
     private var encodableBodyProvider: (() throws -> Data)?
@@ -575,7 +575,7 @@ public class Request: Selfie {
     }
 
     fileprivate func addParams(to urlComponents: URLComponents?) -> URL? {
-        guard var urlComponents = urlComponents else { return nil }
+        guard var urlComponents else { return nil }
         
         if let urlParams = self.urlParams?.map({ key, value in
             URLQueryItem(name: key, value: String(describing: value))
@@ -618,9 +618,8 @@ public class Request: Selfie {
         var randomString = ""
         for _ in 0..<20 { randomString += String(toString.randomElement()!) }
         
-        let boundary = randomString + "\(Int(Date.timeIntervalSinceReferenceDate))"
         
-        return boundary
+        return randomString + "\(Int(Date.timeIntervalSinceReferenceDate))"
     }
     
     fileprivate func buildUploadData(files: [FileUploadData], params: [String: Any], boundary: String) -> Data {

@@ -36,8 +36,7 @@ public extension Date {
 		let dateFormatter = DateFormatter()
 		dateFormatter.dateFormat = format
         dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-		let date = dateFormatter.date(from: dateString)
-		return date
+		return dateFormatter.date(from: dateString)
 	}
 	
     static func today() -> Date {
@@ -45,7 +44,7 @@ public extension Date {
 	}
 	
 	func dateAdding(_ days: Int) -> Date {
-		self.addingTimeInterval(TimeInterval(60*60*24*days))
+		self.addingTimeInterval(TimeInterval(60 * 60 * 24 * days))
 	}
 	
     func string(with format: String = DateISOFormat) -> String {
@@ -99,8 +98,7 @@ public func + (date: Date, days: Int) -> Date {
 
 /// Substract days to a date
 public func - (date: Date, days: Int) -> Date {
-	let newDate = date + (-days)
-	return newDate
+	return date + (-days)
 }
 
 
