@@ -130,7 +130,11 @@ struct ImageDownloader {
             let width = view.width() * UIScreen.main.scale
             let height = view.height() * UIScreen.main.scale
             let targetSize = CGSize(width: width, height: height)
-            Task.detached(priority: .background) {
+            // The network download finished: release the slot now so the next one can start.
+            // Resizing is CPU work; it must not keep a download slot occupied, and a low-priority
+            // resize must never gate the concurrency counter.
+            self.finishDownload()
+            Task.detached(priority: .utility) {
                 var finalImage = image
                 if let resized = image.imageProportionally(with: targetSize) {
                     finalImage = resized
@@ -145,7 +149,6 @@ struct ImageDownloader {
                     // Cache the downloaded image even if the queue entry was already removed
                     // (cancelled/replaced), so we don't discard bytes we already paid to fetch.
                     ImageDownloader.images[requestedBaseURL] = finalImage
-                    self.finishDownload()
                 }
             }
         default:
