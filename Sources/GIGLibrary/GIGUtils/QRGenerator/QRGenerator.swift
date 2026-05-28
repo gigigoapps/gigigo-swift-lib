@@ -19,6 +19,7 @@ open class QR {
 		return UIImage(cgImage: outputImage)
 	}
 	
+	@MainActor
 	open class func generate(_ string: String, onView: UIImageView) {
 		guard let image: CGImage = self.generate(string) else { return }
 		
