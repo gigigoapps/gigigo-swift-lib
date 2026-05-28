@@ -82,9 +82,10 @@ struct ImageDownloaderTests {
         ImageDownloader.shared.download(url: urlString, for: view, placeholder: nil)
         #expect(ImageDownloader.activeDownloads == 1)
 
-        let drained = await waitUntil { ImageDownloader.activeDownloads == 0 }
-        #expect(drained)
-        #expect(ImageDownloader.images[urlString] != nil)
+        // The slot is freed as soon as the network finishes; the image is cached after the resize.
+        let cached = await waitUntil { ImageDownloader.images[urlString] != nil }
+        #expect(cached)
+        #expect(ImageDownloader.activeDownloads == 0)
     }
 
     @Test("Given a failing response, when it completes, then the slot is released")
