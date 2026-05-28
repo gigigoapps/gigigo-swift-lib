@@ -95,6 +95,11 @@ open class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOutp
 		}
 	}
 	
+	/// Checks camera availability and delivers the result via `completion`.
+	///
+	/// `completion` is always invoked on the main actor. For already-determined
+	/// authorization states it is called synchronously; for `.notDetermined` it is
+	/// called asynchronously once the system permission prompt resolves.
 	public func isCameraAvailable(completion: @escaping (Bool) -> Void) {
 		let authStatus: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: AVMediaType.video)
 		switch authStatus {
