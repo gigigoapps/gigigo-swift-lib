@@ -41,7 +41,14 @@ open class Application {
 	
 	public func presentModal(_ viewController: UIViewController) {
 		let topVC = self.topViewController()
-		topVC?.present(viewController, animated: true, completion: nil)
+		// Defer presentation to the next main-actor turn so callers that invoke this from
+		// within a UIKit transition don't hit "present while a presentation is in progress"
+		// (the original code deferred via DispatchQueue.main.async). A Task is used instead
+		// of DispatchQueue.main.async so the non-Sendable view captures stay inside the
+		// main-actor isolation domain and avoid a @Sendable capture warning.
+		Task { @MainActor in
+			topVC?.present(viewController, animated: true, completion: nil)
+		}
 	}
 	
 	
