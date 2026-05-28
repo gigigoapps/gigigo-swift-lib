@@ -126,9 +126,14 @@ open class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOutp
 	}
 	
 	private func requestCameraAccess(completion: @escaping (Bool) -> Void) {
-		AVCaptureDevice.requestAccess(for: AVMediaType.video, completionHandler: { success in
-			completion(success)
-		})
+		// Bridge AVFoundation's @Sendable completion-handler API to async/await so we don't
+		// capture the non-Sendable `completion` inside a @Sendable closure. A Task is needed
+		// because the public isCameraAvailable(completion:) API cannot become async without
+		// breaking callers; the result is delivered back on the main actor.
+		Task { @MainActor in
+			let granted = await AVCaptureDevice.requestAccess(for: .video)
+			completion(granted)
+		}
 	}
 	
 	// MARK: - AVCaptureMetadataOutputObjectsDelegate

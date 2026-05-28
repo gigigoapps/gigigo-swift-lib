@@ -9,6 +9,7 @@
 import Foundation
 import UIKit
 
+@MainActor
 open class Application {
 	
 	public init() {
@@ -40,9 +41,7 @@ open class Application {
 	
 	public func presentModal(_ viewController: UIViewController) {
 		let topVC = self.topViewController()
-		DispatchQueue.main.async(execute: {
-			topVC?.present(viewController, animated: true, completion: nil)
-		})
+		topVC?.present(viewController, animated: true, completion: nil)
 	}
 	
 	

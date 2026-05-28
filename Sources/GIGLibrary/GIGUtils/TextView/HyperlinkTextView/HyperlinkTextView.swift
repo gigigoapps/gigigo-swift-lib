@@ -34,7 +34,11 @@ open class HyperlinkTextView: UITextView {
     
     override open func awakeFromNib() {
         super.awakeFromNib()
-        self.setup()
+        // awakeFromNib is nonisolated but UIKit always invokes it on the main thread,
+        // so we can safely assume main-actor isolation to run the @MainActor setup().
+        MainActor.assumeIsolated {
+            self.setup()
+        }
     }
     
     // MARK: - Custom initializer
