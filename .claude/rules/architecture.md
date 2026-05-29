@@ -14,7 +14,7 @@ Sources/GIGLibrary/
 │       ├── RequestLogFormatter.swift
 │       └── ResponseLogFormatter.swift
 ├── KeychainStore/              # 7 files
-├── GIGScanner/                 # 2 files
+├── GIGScanner/                 # 1 file
 ├── RequestLogInfo.swift
 ├── Libs/External/Reachability.swift
 └── GIGUtils/
