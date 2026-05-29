@@ -9,7 +9,7 @@ import UIKit
 
 /// Public configuration for the library's image downloader.
 ///
-/// Configure it once during app startup, e.g.:
+/// Typically set once at app startup, but safe to change at runtime:
 /// ```swift
 /// ImageDownloaderConfiguration.maxConcurrentDownloads = 4
 /// ```
@@ -19,7 +19,8 @@ public enum ImageDownloaderConfiguration {
     /// Maximum number of images downloaded concurrently.
     ///
     /// Values below `1` are clamped to `1`. Defaults to `6`. Raising the limit at runtime
-    /// immediately starts any downloads that were waiting in the queue.
+    /// starts queued downloads immediately; lowering it only affects future downloads —
+    /// those already in flight run to completion.
     public static var maxConcurrentDownloads: Int {
         get { ImageDownloader.maxConcurrentDownloads }
         set { ImageDownloader.maxConcurrentDownloads = newValue }
