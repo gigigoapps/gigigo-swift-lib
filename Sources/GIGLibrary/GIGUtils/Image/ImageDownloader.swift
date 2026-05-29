@@ -112,6 +112,15 @@ struct ImageDownloader {
         // MainActor) and must be bridged from this MainActor-isolated flow, which is driven by
         // synchronous UIKit callbacks rather than an async context.
         Task { @MainActor in
+            // The view may have been reused (or purged) between reserving the slot above and this
+            // task getting to run. `Request.cancel()` from `download(...)` is a no-op until
+            // `fetch()` installs its in-flight canceller, so if this request is no longer the
+            // current one for the view, release the slot here instead of letting a discarded
+            // download occupy it (and hit the network) until it finishes.
+            guard ImageDownloader.queue[view] === request else {
+                self.finishDownload()
+                return
+            }
             let response = await request.fetch()
             self.handleResponse(response, view: view, request: request)
         }
