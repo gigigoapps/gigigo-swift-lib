@@ -31,7 +31,7 @@ struct ImageDownloaderTests {
     @Test("Given a max of 2, when 5 downloads are requested in one tick, then only 2 are active and 3 stay queued")
     func concurrencyLimitIsRespected() async {
         ImageDownloader.resetForTesting()
-        registerImageResponse(path: "/limit.png")
+        useFailFastRequests()
         ImageDownloaderConfiguration.maxConcurrentDownloads = 2
 
         let views = makeImageViews(count: 5)
@@ -52,7 +52,7 @@ struct ImageDownloaderTests {
     @Test("Given a backlog with the limit reached, when the limit is raised, then queued downloads start immediately")
     func raisingLimitDrainsBacklog() async {
         ImageDownloader.resetForTesting()
-        registerImageResponse(path: "/raise.png")
+        useFailFastRequests()
         ImageDownloaderConfiguration.maxConcurrentDownloads = 1
 
         let views = makeImageViews(count: 3)
@@ -78,7 +78,7 @@ struct ImageDownloaderTests {
         let urlString = "https://example.com/success.png"
         registerImageResponse(path: "/success.png")
 
-        let view = makeImageViews(count: 1)[0]
+        let view = makeImageView()
         ImageDownloader.shared.download(url: urlString, for: view, placeholder: nil)
         #expect(ImageDownloader.activeDownloads == 1)
 
@@ -94,7 +94,7 @@ struct ImageDownloaderTests {
         MockURLProtocol.respond(path: "/error.png", statusCode: 500, headers: nil, data: nil)
         ImageDownloader.requestProvider = { url in Request.testRequest(baseUrl: url, endpoint: "") }
 
-        let view = makeImageViews(count: 1)[0]
+        let view = makeImageView()
         ImageDownloader.shared.download(url: "https://example.com/error.png", for: view, placeholder: nil)
         #expect(ImageDownloader.activeDownloads == 1)
 
@@ -108,26 +108,64 @@ struct ImageDownloaderTests {
         MockURLProtocol.respond(path: "/empty.png", statusCode: 200, headers: nil, data: nil)
         ImageDownloader.requestProvider = { url in Request.testRequest(baseUrl: url, endpoint: "") }
 
-        let view = makeImageViews(count: 1)[0]
+        let view = makeImageView()
         ImageDownloader.shared.download(url: "https://example.com/empty.png", for: view, placeholder: nil)
 
         let drained = await waitUntil { ImageDownloader.activeDownloads == 0 }
         #expect(drained)
     }
 
+    @Test("Given a failed download, when it finishes, then its queue entry is cleared (no leak)")
+    func failedDownloadClearsQueueEntry() async {
+        ImageDownloader.resetForTesting()
+        useFailFastRequests()
+
+        let view = makeImageView()
+        ImageDownloader.shared.download(url: "https://example.com/fail-clear.png", for: view, placeholder: nil)
+
+        let drained = await waitUntil { ImageDownloader.activeDownloads == 0 }
+        #expect(drained)
+        #expect(ImageDownloader.queue[view] == nil)
+    }
+
     @Test("Given an in-flight download replaced for the same view, when both unwind, then the active count ends at zero")
     func replacingDownloadDoesNotLeakSlots() async {
         ImageDownloader.resetForTesting()
-        registerImageResponse(path: "/a.png")
-        registerImageResponse(path: "/b.png")
+        useFailFastRequests()
 
-        let view = makeImageViews(count: 1)[0]
+        let view = makeImageView()
         ImageDownloader.shared.download(url: "https://example.com/a.png", for: view, placeholder: nil)
         ImageDownloader.shared.download(url: "https://example.com/b.png", for: view, placeholder: nil)
 
         let drained = await waitUntil { ImageDownloader.activeDownloads == 0 }
         #expect(drained)
-        #expect(ImageDownloader.activeDownloads >= 0)
+    }
+
+    @Test("Given a view re-requested while still queued, when slots free up, then it is only started once")
+    func requeuingQueuedViewDoesNotDuplicate() async {
+        ImageDownloader.resetForTesting()
+        useFailFastRequests()
+        ImageDownloaderConfiguration.maxConcurrentDownloads = 1
+
+        let busy = makeImageView()      // takes the only slot
+        let queued = makeImageView()    // will wait in the stack
+
+        ImageDownloader.shared.download(url: "https://example.com/dup.png", for: busy, placeholder: nil)
+        ImageDownloader.shared.download(url: "https://example.com/dup.png", for: queued, placeholder: nil)
+        #expect(ImageDownloader.stack.count == 1)
+
+        // Re-request the still-queued view: it must not be enqueued twice.
+        ImageDownloader.shared.download(url: "https://example.com/dup.png", for: queued, placeholder: nil)
+        #expect(ImageDownloader.stack.count == 1)
+
+        // Draining never pushes the in-flight count above the limit of 1.
+        var maxObserved = ImageDownloader.activeDownloads
+        let drained = await waitUntil {
+            maxObserved = max(maxObserved, ImageDownloader.activeDownloads)
+            return ImageDownloader.activeDownloads == 0 && ImageDownloader.stack.isEmpty
+        }
+        #expect(drained)
+        #expect(maxObserved == 1)
     }
 
     // MARK: - Cache hit
@@ -139,7 +177,7 @@ struct ImageDownloaderTests {
         let cached = makeImage(.blue)
         ImageDownloader.images[urlString] = cached
 
-        let view = makeImageViews(count: 1)[0]
+        let view = makeImageView()
         ImageDownloader.shared.download(url: urlString, for: view, placeholder: nil)
 
         #expect(ImageDownloader.activeDownloads == 0)
@@ -150,14 +188,30 @@ struct ImageDownloaderTests {
     // MARK: - Helpers
 
     /// Registers a mock route returning a valid PNG for `path`, and points the downloader at a
-    /// `Request` backed by the mock `URLSession`.
+    /// `Request` backed by the mock `URLSession`. Use when the test needs the success path
+    /// (image decoding + resize + caching).
     private func registerImageResponse(path: String) {
         MockURLProtocol.respond(path: path, statusCode: 200, headers: nil, data: makePNGData())
         ImageDownloader.requestProvider = { url in Request.testRequest(baseUrl: url, endpoint: "") }
     }
 
+    /// Points the downloader at requests that fail fast in `preChecks` (reachability off), so each
+    /// download finishes immediately via the error path WITHOUT touching `URLSession` or the resize.
+    /// Use for tests that only assert the slot counter / queue: the mechanics of `pump`/the counter
+    /// are exercised identically, but draining is deterministic and independent of the network and
+    /// the cooperative thread pool (avoids occasional URLSession stalls under load).
+    private func useFailFastRequests() {
+        ImageDownloader.requestProvider = { url in
+            Request.testRequest(baseUrl: url, endpoint: "", reachable: false)
+        }
+    }
+
+    private func makeImageView() -> UIImageView {
+        return UIImageView(frame: CGRect(x: 0, y: 0, width: 10, height: 10))
+    }
+
     private func makeImageViews(count: Int) -> [UIImageView] {
-        return (0..<count).map { _ in UIImageView(frame: CGRect(x: 0, y: 0, width: 10, height: 10)) }
+        return (0..<count).map { _ in makeImageView() }
     }
 
     private func makeImage(_ color: UIColor) -> UIImage {
@@ -168,10 +222,11 @@ struct ImageDownloaderTests {
         return makeImage(.red).pngData() ?? Data()
     }
 
-    /// Polls `condition` on the MainActor until it is true or the timeout elapses. Returns as
-    /// soon as the condition holds. The timeout is generous because the success path resizes
-    /// images on a `.background` Task, which xctest can throttle heavily.
-    private func waitUntil(timeout: Duration = .seconds(15), _ condition: () -> Bool) async -> Bool {
+    /// Polls `condition` on the MainActor until it is true or the timeout elapses. Returns as soon
+    /// as the condition holds, so warm runs finish in milliseconds. The timeout is generous because
+    /// the first test that chains async hops pays a one-time concurrency-runtime/simulator warm-up
+    /// (observed up to ~12s cold); later async tests then run in milliseconds.
+    private func waitUntil(timeout: Duration = .seconds(30), _ condition: () -> Bool) async -> Bool {
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: timeout)
         while !condition() {

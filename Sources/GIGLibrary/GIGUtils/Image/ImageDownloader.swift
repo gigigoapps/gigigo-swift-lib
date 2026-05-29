@@ -83,6 +83,9 @@ struct ImageDownloader {
         let request = Request(method: .get, baseUrl: url, endpoint: "", bodyParams: nil)
         #endif
         ImageDownloader.queue[view] = request
+        // Drop any stale pending entry for this view before re-enqueuing it, so a view that was
+        // re-requested while still queued (e.g. a reused cell) is never started more than once.
+        ImageDownloader.stack.removeAll { $0 === view }
         ImageDownloader.stack.append(view)
         self.pump()
     }
@@ -102,13 +105,12 @@ struct ImageDownloader {
     private func startDownload(for view: UIImageView) {
         guard let request = ImageDownloader.queue[view] else { return }
         ImageDownloader.activeDownloads += 1
-        let requestedBaseURL = request.baseURL
         // Unstructured Task is required here: `fetch()` is `@concurrent` (it runs off the
         // MainActor) and must be bridged from this MainActor-isolated flow, which is driven by
         // synchronous UIKit callbacks rather than an async context.
         Task { @MainActor in
             let response = await request.fetch()
-            self.handleResponse(response, view: view, requestedBaseURL: requestedBaseURL)
+            self.handleResponse(response, view: view, request: request)
         }
     }
 
@@ -119,11 +121,21 @@ struct ImageDownloader {
         self.pump()
     }
 
-    private func handleResponse(_ response: Response, view: UIImageView, requestedBaseURL: String) {
+    /// Removes `view`'s queue entry only if it still holds THIS exact request, compared by object
+    /// identity (not URL). A stale completion must never evict a newer request's entry for the same
+    /// reused view — even when both target the same URL.
+    private func clearQueueEntry(for view: UIImageView, ifCurrent request: Request) {
+        if ImageDownloader.queue[view] === request {
+            ImageDownloader.queue.removeValue(forKey: view)
+        }
+    }
+
+    private func handleResponse(_ response: Response, view: UIImageView, request: Request) {
         switch response.status {
         case .success:
             guard let image = try? response.image() else {
                 LogWarn("While downloading the image, the body was empty or the image type was not recognized.")
+                self.clearQueueEntry(for: view, ifCurrent: request)
                 self.finishDownload()
                 return
             }
@@ -140,19 +152,20 @@ struct ImageDownloader {
                     finalImage = resized
                 }
                 await MainActor.run {
-                    if let currentRequest = ImageDownloader.queue[view], requestedBaseURL == currentRequest.baseURL {
+                    // Compare by object identity: a stale resize for a reused view (even one that
+                    // targets the same URL) must NOT paint over or evict the newer request.
+                    if ImageDownloader.queue[view] === request {
                         self.setAnimated(image: finalImage, in: view)
+                        ImageDownloader.queue.removeValue(forKey: view)
                     }
-                    if let index = ImageDownloader.queue.index(forKey: view) {
-                        ImageDownloader.queue.remove(at: index)
-                    }
-                    // Cache the downloaded image even if the queue entry was already removed
-                    // (cancelled/replaced), so we don't discard bytes we already paid to fetch.
-                    ImageDownloader.images[requestedBaseURL] = finalImage
+                    // Cache the downloaded image even if this request is no longer the current one
+                    // for the view, so we don't discard bytes we already paid to fetch.
+                    ImageDownloader.images[request.baseURL] = finalImage
                 }
             }
         default:
             LogError(response.error)
+            self.clearQueueEntry(for: view, ifCurrent: request)
             self.finishDownload()
         }
     }
