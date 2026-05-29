@@ -168,6 +168,27 @@ struct ImageDownloaderTests {
         #expect(maxObserved == 1)
     }
 
+    @Test("Given a view reused before its task runs, when the task runs, then the stale request never hits the network")
+    func reusedBeforeStartDoesNotFetch() async {
+        ImageDownloader.resetForTesting()
+        let networkHits = RequestCounter()
+        MockURLProtocol.respond(path: "/race.png", statusCode: 200, headers: nil, data: makePNGData()) { _ in
+            networkHits.increment()
+        }
+        ImageDownloader.requestProvider = { url in Request.testRequest(baseUrl: url, endpoint: "") }
+
+        // Two synchronous requests on the same view (same URL), before either task gets to run.
+        let view = makeImageView()
+        ImageDownloader.shared.download(url: "https://example.com/race.png", for: view, placeholder: nil)
+        ImageDownloader.shared.download(url: "https://example.com/race.png", for: view, placeholder: nil)
+
+        let drained = await waitUntil { ImageDownloader.activeDownloads == 0 }
+        #expect(drained)
+        // Only the current (second) request reaches the network; the replaced one is dropped by
+        // the identity guard in `startDownload` before it can fetch and occupy a slot.
+        #expect(networkHits.value == 1)
+    }
+
     // MARK: - Cache hit
 
     @Test("Given a cached URL, when requested, then no download starts and the cached image is assigned")
@@ -249,5 +270,24 @@ extension ImageDownloader {
         activeDownloads = 0
         maxConcurrentDownloads = 6  // setter clamps and pumps (a no-op while the stack is empty)
         requestProvider = { url in Request(method: .get, baseUrl: url, endpoint: "", bodyParams: nil) }
+    }
+}
+
+/// Thread-safe counter for assertions driven from `MockURLProtocol` handlers, which run off the
+/// main actor.
+private final class RequestCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    func increment() {
+        lock.lock()
+        count += 1
+        lock.unlock()
+    }
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
     }
 }
