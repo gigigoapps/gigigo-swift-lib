@@ -51,7 +51,10 @@ struct ImageDownloader {
                 ImageDownloader.images = [:]
                 ImageDownloader.stack = []
                 ImageDownloader.queue = [:]
-                ImageDownloader.activeDownloads = 0
+                // Intentionally do NOT reset `activeDownloads`: the in-flight fetches keep running
+                // and decrement it themselves as they unwind. Zeroing it here would let new
+                // requests start a full batch on top of the still-running ones, briefly doubling
+                // the configured concurrency precisely under memory pressure.
             }
         }
     }
@@ -152,15 +155,15 @@ struct ImageDownloader {
                     finalImage = resized
                 }
                 await MainActor.run {
-                    // Compare by object identity: a stale resize for a reused view (even one that
-                    // targets the same URL) must NOT paint over or evict the newer request.
-                    if ImageDownloader.queue[view] === request {
-                        self.setAnimated(image: finalImage, in: view)
-                        ImageDownloader.queue.removeValue(forKey: view)
-                    }
-                    // Cache the downloaded image even if this request is no longer the current one
-                    // for the view, so we don't discard bytes we already paid to fetch.
+                    // Compare by object identity: only the still-current request for this view may
+                    // apply its image, cache it, and clear its entry. This way a stale resize (the
+                    // view was reused, even for the same URL) never paints over the newer request,
+                    // and a completion whose entry was purged by a memory warning does NOT refill
+                    // the cache the app was trying to free.
+                    guard ImageDownloader.queue[view] === request else { return }
+                    self.setAnimated(image: finalImage, in: view)
                     ImageDownloader.images[request.baseURL] = finalImage
+                    ImageDownloader.queue.removeValue(forKey: view)
                 }
             }
         default:
