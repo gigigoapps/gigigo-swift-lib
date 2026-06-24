@@ -91,6 +91,34 @@ struct KeychainOptionsTests {
         #expect(CFGetTypeID(accessControl as CFTypeRef) == SecAccessControlGetTypeID())
     }
 
+    // MARK: - Synchronizable
+
+    @Test("Without an authentication policy, synchronizable reflects the configured flag")
+    func synchronizableReflectsFlagWithoutPolicy() throws {
+        let syncable = makeOptions(accessibility: .afterFirstUnlock, synchronizable: true)
+        let (syncAttributes, _) = syncable.attributes(key: "token", value: Data("v".utf8))
+        #expect((syncAttributes[KeychainConstants.AttributeSynchronizable] as? Bool) == true)
+
+        let nonSyncable = makeOptions(accessibility: .afterFirstUnlock, synchronizable: false)
+        let (nonSyncAttributes, _) = nonSyncable.attributes(key: "token", value: Data("v".utf8))
+        #expect((nonSyncAttributes[KeychainConstants.AttributeSynchronizable] as? Bool) == false)
+    }
+
+    @Test("An authentication policy forces the item non-synchronizable even if synchronizable was requested")
+    func authenticationPolicyForcesNonSynchronizable() throws {
+        let options = makeOptions(
+            accessibility: .whenUnlockedThisDeviceOnly,
+            authenticationPolicy: .biometryAny,
+            synchronizable: true
+        )
+        let (attributes, error) = options.attributes(key: "token", value: Data("v".utf8))
+
+        #expect(error == nil)
+        #expect(attributes[KeychainConstants.AttributeAccessControl] != nil)
+        // Access-control items cannot be synced; the requested `true` is overridden.
+        #expect((attributes[KeychainConstants.AttributeSynchronizable] as? Bool) == false)
+    }
+
     // MARK: - Other attributes
 
     @Test("The value data is always written")
@@ -100,5 +128,22 @@ struct KeychainOptionsTests {
         let (attributes, _) = options.attributes(key: "token", value: data)
 
         #expect(attributes[KeychainConstants.ValueData] as? Data == data)
+    }
+
+    // MARK: - Error surfacing
+
+    /// The access-control failure branch surfaces a `CFError` bridged through the
+    /// `CFError.error` helper. The branch itself is unreachable with valid inputs
+    /// (see `KeychainOptions`), so we verify the bridging helper that carries the
+    /// error to the caller preserves the domain, code, and user info.
+    @Test("CFError is bridged to an NSError preserving domain, code and user info")
+    func cfErrorBridgesToNSError() throws {
+        let userInfo = ["reason": "boom"] as CFDictionary
+        let cfError = CFErrorCreate(nil, "com.gigigo.tests.keychain" as CFString, 42, userInfo)
+        let nsError = try #require(cfError).error
+
+        #expect(nsError.domain == "com.gigigo.tests.keychain")
+        #expect(nsError.code == 42)
+        #expect(nsError.userInfo["reason"] as? String == "boom")
     }
 }
