@@ -42,7 +42,8 @@ struct KeychainOptionsTests {
             (.whenUnlockedThisDeviceOnly, kSecAttrAccessibleWhenUnlockedThisDeviceOnly),
             (.afterFirstUnlockThisDeviceOnly, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly),
             (.always, kSecAttrAccessibleAfterFirstUnlock),
-            (.alwaysThisDeviceOnly, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
+            (.alwaysThisDeviceOnly, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly),
+            (.whenPasscodeSetThisDeviceOnly, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly)
         ]
 
         for (accessibility, expected) in cases {
@@ -54,6 +55,15 @@ struct KeychainOptionsTests {
             // Plain accessibility and access control are mutually exclusive.
             #expect(attributes[KeychainConstants.AttributeAccessControl] == nil)
         }
+    }
+
+    @Test("whenPasscodeSetThisDeviceOnly round-trips through rawValue / init / description")
+    func passcodeSetAccessibilityRoundTrips() throws {
+        let accessibility = KeychainAccessibility.whenPasscodeSetThisDeviceOnly
+
+        #expect(accessibility.rawValue == kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly as String)
+        #expect(KeychainAccessibility(rawValue: accessibility.rawValue) == accessibility)
+        #expect(accessibility.description == "WhenPasscodeSetThisDeviceOnly")
     }
 
     @Test("The default accessibility (.afterFirstUnlock) is no longer silently dropped")
