@@ -85,15 +85,24 @@ extension KeychainOptions {
                 flags,
                 &accessControlError
             ) else {
+                // Defensive: `SecAccessControlCreateWithFlags` only fails when the
+                // protection class is not a valid `kSecAttrAccessible` value, which
+                // `secAttrAccessibleValue` never produces today. Surface the
+                // `CFError` rather than silently dropping the access control if a
+                // future accessibility ever maps to an invalid value.
                 let error: Error = (accessControlError?.takeRetainedValue().error as Error?) ?? Status.unexpectedError
                 return (attributes, error)
             }
             attributes[KeychainConstants.AttributeAccessControl] = accessControl
+            // Policy-gated items are device-local: iCloud Keychain cannot sync them,
+            // and combining an access control with `synchronizable = true` makes the
+            // keychain reject the item (errSecParam). Force them non-synchronizable.
+            attributes[KeychainConstants.AttributeSynchronizable] = kCFBooleanFalse
         } else {
             attributes[KeychainConstants.AttributeAccessible] = self.accessibility.secAttrAccessibleValue
+            attributes[KeychainConstants.AttributeSynchronizable] = self.synchronizable ? kCFBooleanTrue : kCFBooleanFalse
         }
 
-        attributes[KeychainConstants.AttributeSynchronizable] = self.synchronizable ? kCFBooleanTrue : kCFBooleanFalse
         return (attributes, nil)
     }
 }
