@@ -28,10 +28,16 @@ public enum KeychainAccessibility {
     case afterFirstUnlock
 
     /**
-     Item data can always be accessed
-     regardless of the lock state of the device. This is not recommended
-     for anything except system use. Items with this attribute will migrate
-     to a new device when using encrypted backups.
+     Historically: item data accessible regardless of the lock state of the device.
+
+     - Warning: The underlying `kSecAttrAccessibleAlways` constant has been
+       deprecated since iOS 12 and is rejected by the keychain on iOS 16+.
+       Items are therefore stored with `afterFirstUnlock` semantics (Apple's
+       recommended replacement): available for background use after the first
+       unlock following a reboot, but **not** during the before-first-unlock
+       window. True always-on access is no longer available on any supported OS.
+       Prefer `.afterFirstUnlock` explicitly; this case is kept for source
+       compatibility. Items migrate to a new device via encrypted backups.
      */
     case always
 
@@ -55,11 +61,18 @@ public enum KeychainAccessibility {
     case afterFirstUnlockThisDeviceOnly
 
     /**
-     Item data can always
-     be accessed regardless of the lock state of the device. This option
-     is not recommended for anything except system use. Items with this
-     attribute will never migrate to a new device, so after a backup is
-     restored to a new device, these items will be missing.
+     Historically: item data accessible regardless of the lock state of the
+     device, without ever migrating to another device.
+
+     - Warning: The underlying `kSecAttrAccessibleAlwaysThisDeviceOnly` constant
+       has been deprecated since iOS 12 and is rejected by the keychain on
+       iOS 16+. Items are therefore stored with `afterFirstUnlockThisDeviceOnly`
+       semantics (Apple's recommended replacement): available for background use
+       after the first unlock following a reboot, but **not** during the
+       before-first-unlock window. True always-on access is no longer available
+       on any supported OS. Prefer `.afterFirstUnlockThisDeviceOnly` explicitly;
+       this case is kept for source compatibility. Items never migrate to a new
+       device.
      */
     case alwaysThisDeviceOnly
 
@@ -172,6 +185,22 @@ extension KeychainAccessibility {
             return kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         case .whenPasscodeSetThisDeviceOnly:
             return kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly
+        }
+    }
+
+    /// Whether this protection class is device-local — its effective
+    /// `kSecAttrAccessible` value ends in `ThisDeviceOnly`. iCloud Keychain
+    /// cannot synchronize such items; combining them with
+    /// `kSecAttrSynchronizable = true` is rejected with `errSecParam`.
+    var isThisDeviceOnly: Bool {
+        switch self {
+        case .whenUnlocked, .afterFirstUnlock, .always:
+            return false
+        case .whenUnlockedThisDeviceOnly,
+             .afterFirstUnlockThisDeviceOnly,
+             .alwaysThisDeviceOnly,
+             .whenPasscodeSetThisDeviceOnly:
+            return true
         }
     }
 }
