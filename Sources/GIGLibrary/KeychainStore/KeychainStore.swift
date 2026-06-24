@@ -221,13 +221,26 @@ open class KeychainStore {
         let status = SecItemCopyMatching(query as CFDictionary, nil)
         switch status {
         case errSecSuccess, errSecInteractionNotAllowed:
-            if self.options.authenticationPolicy != nil {
-                // A `SecAccessControl` (`kSecAttrAccessControl`) can only be applied via
-                // `SecItemAdd` — it is add-only for `SecItemUpdate`. Updating in place
-                // would refresh the value while leaving the existing item's protection
-                // untouched, so the policy must be (re)applied by recreating the item.
+            if self.options.authenticationPolicy != nil && status == errSecSuccess {
+                // The existing item is readable — it carries no access control — but the
+                // store wants a policy. `kSecAttrAccessControl` is add-only for
+                // `SecItemUpdate`, so the access control is applied by recreating the item.
+                // `recreate` backs up the readable value first, so this is safe. (An item
+                // that is already gated probes as `errSecInteractionNotAllowed` and falls
+                // through to the in-place update below, so refreshing a protected credential
+                // is NOT turned into a recreate.)
                 try self.recreate(value, key: key, ignoringAttributeSynchronizable: ignoringAttributeSynchronizable)
             } else {
+                // No policy, or the item is already access-control-gated
+                // (`errSecInteractionNotAllowed`): update the value in place. The update
+                // never carries `kSecAttrAccessControl` (it is add-only), so an existing gate
+                // is preserved — refreshing a protected credential just updates its value
+                // (which triggers the gate's own authentication, as it should). A plain store
+                // overwriting a still-gated key can't reconcile `kSecAttrAccessible` with the
+                // existing access control and surfaces the failure; drop protection with an
+                // explicit `remove` + `set` (we don't auto-recreate: `SecItemUpdate` can also
+                // fail with `errSecParam` for unrelated reasons, and a blind delete+add could
+                // drop the credential).
                 var updateQuery = self.options.query()
                 updateQuery[KeychainConstants.AttributeAccount] = key
 
@@ -236,13 +249,6 @@ open class KeychainStore {
 
                 self.options.attributes.forEach { attributes.updateValue($1, forKey: $0) }
 
-                // A plain store overwriting a key that was previously written with an
-                // access control can't reconcile `kSecAttrAccessible` with the existing
-                // `kSecAttrAccessControl` in place, so the update fails and is surfaced.
-                // We deliberately do NOT auto-recreate here: `SecItemUpdate` can fail with
-                // `errSecParam` for unrelated reasons (e.g. a malformed custom attribute),
-                // and a blind delete+add could drop the credential. Changing protection
-                // downward requires an explicit `remove` + `set`.
                 let updateStatus = SecItemUpdate(updateQuery as CFDictionary, attributes as CFDictionary)
                 if updateStatus != errSecSuccess {
                     throw self.securityError(status: updateStatus)
@@ -255,23 +261,19 @@ open class KeychainStore {
         }
     }
 
-    /// Recreates an item (delete + add) to apply a protection change that
-    /// `SecItemUpdate` cannot make (adding or removing `kSecAttrAccessControl`).
+    /// Recreates an item (delete + add) to add an access control that `SecItemUpdate`
+    /// cannot apply. Only called when the existing item is readable (it has no access
+    /// control yet), so its value can be backed up first.
     ///
-    /// Recreation is inherently non-atomic, so it is done defensively:
-    /// - It first reads the current value with a non-interactive context (no auth UI).
-    ///   If that fails — the item is protected/locked, e.g. before first unlock — it
-    ///   refuses to delete and throws `Status.interactionNotAllowed`, leaving the
-    ///   existing credential intact. The caller retries when unlocked or `remove`s it.
-    /// - With a backup in hand it deletes and re-adds. If the re-add fails it restores
-    ///   the backup with a guaranteed-storable protection (`.afterFirstUnlock`, no
-    ///   policy, non-synchronizable) so the restore itself can't fail on a device-state
-    ///   precondition (e.g. a passcode-gated class with no passcode set). The rethrown
-    ///   error tells the caller the requested protection was not applied; the credential
-    ///   survives at the fallback protection rather than being lost.
+    /// Done defensively: if the value can't be read back (the item vanished or became
+    /// protected) it refuses to delete and throws `Status.interactionNotAllowed`. After
+    /// deleting and re-adding, a failed re-add restores the backup with the item's
+    /// ORIGINAL accessibility and synchronizable flag (and no access control, since it
+    /// had none) — so a failed upgrade never leaves the credential more exposed than it
+    /// was, nor lost. Custom attributes are dropped on restore so it can't fail on them.
     private func recreate(_ value: Data, key: String, ignoringAttributeSynchronizable: Bool) throws {
-        guard let backup = self.dataWithoutInteraction(key, ignoringAttributeSynchronizable: ignoringAttributeSynchronizable) else {
-            // Can't capture a backup (protected/locked, or vanished) → don't delete.
+        guard let backup = self.backupWithoutInteraction(key, ignoringAttributeSynchronizable: ignoringAttributeSynchronizable) else {
+            // Can't capture a backup (became protected/locked, or vanished) → don't delete.
             throw Status.interactionNotAllowed
         }
 
@@ -279,30 +281,45 @@ open class KeychainStore {
         do {
             try self.add(value, key: key)
         } catch {
-            var fallback = self.options
-            fallback.authenticationPolicy = nil
-            fallback.accessibility = .afterFirstUnlock
-            fallback.synchronizable = false
-            fallback.attributes = [:]   // drop custom attributes; the restore must not fail
-            try? self.add(backup, key: key, options: fallback)
+            var restore = self.options
+            restore.authenticationPolicy = nil
+            restore.accessibility = backup.accessibility
+            restore.synchronizable = backup.synchronizable
+            restore.attributes = [:]   // drop custom attributes so the restore can't fail on them
+            try? self.add(backup.data, key: key, options: restore)
             throw error
         }
     }
 
-    /// Reads an item's data with a non-interactive `LAContext` so it never surfaces an
-    /// authentication UI. Returns `nil` if the item is absent or its data can't be
-    /// accessed without interaction. Used to back up a value before recreating it.
-    private func dataWithoutInteraction(_ key: String, ignoringAttributeSynchronizable: Bool) -> Data? {
+    /// A value plus the protection attributes needed to faithfully restore it.
+    private struct ItemBackup {
+        let data: Data
+        let accessibility: KeychainAccessibility
+        let synchronizable: Bool
+    }
+
+    /// Reads an item's data and protection attributes with a non-interactive `LAContext`,
+    /// so it never surfaces an authentication UI. Returns `nil` if the item is absent or
+    /// can't be read without interaction (i.e. it is access-control-gated). Used to back
+    /// up a value, with its original protection, before recreating it.
+    private func backupWithoutInteraction(_ key: String, ignoringAttributeSynchronizable: Bool) -> ItemBackup? {
         var query = self.options.query(ignoringAttributeSynchronizable: ignoringAttributeSynchronizable)
         query[KeychainConstants.MatchLimit] = KeychainConstants.MatchLimitOne
         query[KeychainConstants.ReturnData] = kCFBooleanTrue
+        query[KeychainConstants.ReturnAttributes] = kCFBooleanTrue
         query[KeychainConstants.AttributeAccount] = key
         query[KeychainConstants.UseAuthenticationContext] = interactionNotAllowedContext()
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess else { return nil }
-        return result as? Data
+        guard status == errSecSuccess,
+              let attributes = result as? [String: Any],
+              let data = attributes[KeychainConstants.ValueData] as? Data else { return nil }
+
+        let accessibility = (attributes[KeychainConstants.AttributeAccessible] as? String)
+            .flatMap(KeychainAccessibility.init(rawValue:)) ?? .afterFirstUnlock
+        let synchronizable = (attributes[KeychainConstants.AttributeSynchronizable] as? Bool) ?? false
+        return ItemBackup(data: data, accessibility: accessibility, synchronizable: synchronizable)
     }
 
     /// Builds the full item attributes and inserts it with `SecItemAdd`. Used for a
