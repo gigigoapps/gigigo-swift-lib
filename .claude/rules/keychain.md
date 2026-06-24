@@ -62,4 +62,6 @@ KeychainStore.allItems()               // [[String: Any]] across all
 ## Pitfalls
 
 - Throwing methods must be wrapped in `try`/`do-catch`; use subscript accessors when error handling is not critical
+- `.accessibility(.whenPasscodeSetThisDeviceOnly, ...)` requires a device passcode: `set` throws if none is set, and the item is deleted if the user later removes the passcode. It never migrates to another device.
+- Combining an `authenticationPolicy` with `.synchronizable(true)` is invalid — policy-gated items are device-local and are stored non-synchronizable regardless of the flag.
 - `setLogValues(forModule:)` in `LogManager` throws if the module is registered twice — call `removeSettingsForModule` before re-registering (unrelated but often paired with Keychain setup)

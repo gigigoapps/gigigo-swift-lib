@@ -60,6 +60,10 @@ struct KeychainStoreAccessibilityTests {
 
     @Test("Stored accessibility is persisted and read back as kSecAttrAccessible")
     func accessibilityRoundTrips() throws {
+        // `.whenPasscodeSetThisDeviceOnly` is intentionally excluded: it can only
+        // be written when the device has a passcode, so a live round-trip would be
+        // environment-dependent. Its mapping is covered deterministically in
+        // KeychainOptionsTests.
         let cases: [(KeychainAccessibility, CFString)] = [
             (.whenUnlocked, kSecAttrAccessibleWhenUnlocked),
             (.afterFirstUnlock, kSecAttrAccessibleAfterFirstUnlock),

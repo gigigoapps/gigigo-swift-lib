@@ -62,6 +62,19 @@ public enum KeychainAccessibility {
      restored to a new device, these items will be missing.
      */
     case alwaysThisDeviceOnly
+
+    /**
+     Item data can only be accessed while the device is unlocked. Available only
+     when a passcode is set on the device. This is the highest-security option,
+     recommended for items that need protection by the device passcode (and,
+     combined with an `authenticationPolicy`, by biometrics).
+
+     - Important: This accessibility requires a device passcode. Writing an item
+       with it while no passcode is set fails (the Security framework returns an
+       error). The item never migrates to another device, and it is **deleted**
+       if the user removes the device passcode.
+     */
+    case whenPasscodeSetThisDeviceOnly
 }
 
 extension KeychainAccessibility: RawRepresentable, CustomStringConvertible {
@@ -83,6 +96,8 @@ extension KeychainAccessibility: RawRepresentable, CustomStringConvertible {
             self = .afterFirstUnlockThisDeviceOnly
         case KeychainAccessibility.accessibleAlwaysThisDeviceOnlyValue:
             self = .alwaysThisDeviceOnly
+        case String(kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly):
+            self = .whenPasscodeSetThisDeviceOnly
         default:
             return nil
         }
@@ -102,6 +117,8 @@ extension KeychainAccessibility: RawRepresentable, CustomStringConvertible {
             return String(kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
         case .alwaysThisDeviceOnly:
             return KeychainAccessibility.accessibleAlwaysThisDeviceOnlyValue
+        case .whenPasscodeSetThisDeviceOnly:
+            return String(kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly)
         }
     }
 
@@ -119,6 +136,8 @@ extension KeychainAccessibility: RawRepresentable, CustomStringConvertible {
             return "AfterFirstUnlockThisDeviceOnly"
         case .alwaysThisDeviceOnly:
             return "AlwaysThisDeviceOnly"
+        case .whenPasscodeSetThisDeviceOnly:
+            return "WhenPasscodeSetThisDeviceOnly"
         }
     }
 }
@@ -151,6 +170,8 @@ extension KeychainAccessibility {
             return kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         case .afterFirstUnlockThisDeviceOnly, .alwaysThisDeviceOnly:
             return kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        case .whenPasscodeSetThisDeviceOnly:
+            return kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly
         }
     }
 }
