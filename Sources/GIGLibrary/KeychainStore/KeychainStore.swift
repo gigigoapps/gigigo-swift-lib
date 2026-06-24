@@ -236,16 +236,15 @@ open class KeychainStore {
 
                 self.options.attributes.forEach { attributes.updateValue($1, forKey: $0) }
 
+                // A plain store overwriting a key that was previously written with an
+                // access control can't reconcile `kSecAttrAccessible` with the existing
+                // `kSecAttrAccessControl` in place, so the update fails and is surfaced.
+                // We deliberately do NOT auto-recreate here: `SecItemUpdate` can fail with
+                // `errSecParam` for unrelated reasons (e.g. a malformed custom attribute),
+                // and a blind delete+add could drop the credential. Changing protection
+                // downward requires an explicit `remove` + `set`.
                 let updateStatus = SecItemUpdate(updateQuery as CFDictionary, attributes as CFDictionary)
-                switch updateStatus {
-                case errSecSuccess:
-                    break
-                case errSecParam:
-                    // The existing item likely carries a `kSecAttrAccessControl` that an
-                    // in-place update can't reconcile with a plain accessibility. Recreate
-                    // to drop the old gate and apply the requested plain protection.
-                    try self.recreate(value, key: key, ignoringAttributeSynchronizable: ignoringAttributeSynchronizable)
-                default:
+                if updateStatus != errSecSuccess {
                     throw self.securityError(status: updateStatus)
                 }
             }
@@ -284,6 +283,7 @@ open class KeychainStore {
             fallback.authenticationPolicy = nil
             fallback.accessibility = .afterFirstUnlock
             fallback.synchronizable = false
+            fallback.attributes = [:]   // drop custom attributes; the restore must not fail
             try? self.add(backup, key: key, options: fallback)
             throw error
         }
