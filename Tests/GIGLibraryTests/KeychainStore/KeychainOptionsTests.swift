@@ -101,6 +101,39 @@ struct KeychainOptionsTests {
         #expect(CFGetTypeID(accessControl as CFTypeRef) == SecAccessControlGetTypeID())
     }
 
+    // MARK: - Update path (key == nil)
+
+    @Test("On the update path, access control is omitted (kSecAttrAccessControl is add-only)")
+    func updatePathOmitsAccessControl() throws {
+        let options = makeOptions(accessibility: .whenUnlockedThisDeviceOnly, authenticationPolicy: .biometryAny)
+        // key == nil → SecItemUpdate attributes. SecItemUpdate rejects kSecAttrAccessControl.
+        let (attributes, error) = options.attributes(key: nil, value: Data("v".utf8))
+
+        #expect(error == nil)
+        #expect(attributes[KeychainConstants.AttributeAccessControl] == nil)
+        // A policy store never writes the plain accessible attribute either.
+        #expect(attributes[KeychainConstants.AttributeAccessible] == nil)
+        #expect(attributes[KeychainConstants.ValueData] as? Data == Data("v".utf8))
+    }
+
+    @Test("On the update path, a non-policy store still rewrites kSecAttrAccessible")
+    func updatePathKeepsAccessibleForNonPolicy() throws {
+        let options = makeOptions(accessibility: .afterFirstUnlockThisDeviceOnly)
+        let (attributes, _) = options.attributes(key: nil, value: Data("v".utf8))
+
+        #expect(attributes[KeychainConstants.AttributeAccessible] as? String == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
+        #expect(attributes[KeychainConstants.AttributeAccessControl] == nil)
+    }
+
+    @Test("On the add path, a policy store still attaches the access control")
+    func addPathAttachesAccessControl() throws {
+        let options = makeOptions(accessibility: .whenUnlockedThisDeviceOnly, authenticationPolicy: .biometryAny)
+        let (attributes, error) = options.attributes(key: "token", value: Data("v".utf8))
+
+        #expect(error == nil)
+        #expect(attributes[KeychainConstants.AttributeAccessControl] != nil)
+    }
+
     // MARK: - Synchronizable
 
     @Test("Without an authentication policy, synchronizable reflects the configured flag")

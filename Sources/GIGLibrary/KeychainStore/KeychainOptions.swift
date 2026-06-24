@@ -68,9 +68,13 @@ extension KeychainOptions {
     }
 
     func attributes(key: String?, value: Data) -> ([String: Any], Error?) {
-        var attributes: [String: Any]
+        // `key != nil` is the add path (`SecItemAdd`): build the full item, query
+        // base + account included. `key == nil` is the update path
+        // (`SecItemUpdate`): build only the mutable attributes to change.
+        let isAdding = key != nil
 
-        if key != nil {
+        var attributes: [String: Any]
+        if isAdding {
             attributes = self.query()
             attributes[KeychainConstants.AttributeAccount] = key
         } else {
@@ -86,29 +90,34 @@ extension KeychainOptions {
             attributes[KeychainConstants.AttributeComment] = comment
         }
 
-        // Protection class. When an authentication policy is requested we build a
-        // `SecAccessControl` (`kSecAttrAccessControl`); otherwise we write the
-        // plain `kSecAttrAccessible` value. The two are mutually exclusive — the
-        // keychain rejects an item that carries both — so we never set them
-        // together.
+        // Protection class.
+        //
+        // `kSecAttrAccessible` is mutable, so it is (re)written on both add and
+        // update. `kSecAttrAccessControl` is add-only — `SecItemUpdate` rejects it
+        // (errSecParam) — and the two are mutually exclusive, so the access control
+        // is built and attached only when adding. On update the existing item's
+        // access control is left in place; changing the protection policy of an
+        // existing key therefore requires remove() + set().
         if let authenticationPolicy = self.authenticationPolicy {
-            var accessControlError: Unmanaged<CFError>?
-            let flags = SecAccessControlCreateFlags(rawValue: authenticationPolicy.rawValue)
-            guard let accessControl = SecAccessControlCreateWithFlags(
-                nil,
-                self.accessibility.secAttrAccessibleValue,
-                flags,
-                &accessControlError
-            ) else {
-                // Defensive: `SecAccessControlCreateWithFlags` only fails when the
-                // protection class is not a valid `kSecAttrAccessible` value, which
-                // `secAttrAccessibleValue` never produces today. Surface the
-                // `CFError` rather than silently dropping the access control if a
-                // future accessibility ever maps to an invalid value.
-                let error: Error = (accessControlError?.takeRetainedValue().error as Error?) ?? Status.unexpectedError
-                return (attributes, error)
+            if isAdding {
+                var accessControlError: Unmanaged<CFError>?
+                let flags = SecAccessControlCreateFlags(rawValue: authenticationPolicy.rawValue)
+                guard let accessControl = SecAccessControlCreateWithFlags(
+                    nil,
+                    self.accessibility.secAttrAccessibleValue,
+                    flags,
+                    &accessControlError
+                ) else {
+                    // Defensive: `SecAccessControlCreateWithFlags` only fails when the
+                    // protection class is not a valid `kSecAttrAccessible` value, which
+                    // `secAttrAccessibleValue` never produces today. Surface the
+                    // `CFError` rather than silently dropping the access control if a
+                    // future accessibility ever maps to an invalid value.
+                    let error: Error = (accessControlError?.takeRetainedValue().error as Error?) ?? Status.unexpectedError
+                    return (attributes, error)
+                }
+                attributes[KeychainConstants.AttributeAccessControl] = accessControl
             }
-            attributes[KeychainConstants.AttributeAccessControl] = accessControl
         } else {
             attributes[KeychainConstants.AttributeAccessible] = self.accessibility.secAttrAccessibleValue
         }
