@@ -12,10 +12,10 @@ public protocol HyperlinkTextViewDelegate: AnyObject {
     func didTapOnHyperlink(URL: URL)
 }
 
-open class HyperlinkTextView: UITextView {
+public final class HyperlinkTextView: UITextView {
     
     // MARK: - Public properties
-    weak open var hyperlinkDelegate: HyperlinkTextViewDelegate?
+    weak public var hyperlinkDelegate: HyperlinkTextViewDelegate?
     
     // MARK: - Private properties
     private var linkTapGestureRecognizer: UITapGestureRecognizer?
@@ -32,7 +32,7 @@ open class HyperlinkTextView: UITextView {
         self.setup()
     }
     
-    override open func awakeFromNib() {
+    override public func awakeFromNib() {
         super.awakeFromNib()
         // awakeFromNib is nonisolated but UIKit always invokes it on the main thread,
         // so we can safely assume main-actor isolation to run the @MainActor setup().
@@ -53,7 +53,7 @@ open class HyperlinkTextView: UITextView {
     
     // MARK: - Public methods
     
-    open func setText(htmlText: String) {
+    public func setText(htmlText: String) {
         let styledAttributedText = self.setupAttributedString(from: htmlText)
         self.attributedText = styledAttributedText
     }

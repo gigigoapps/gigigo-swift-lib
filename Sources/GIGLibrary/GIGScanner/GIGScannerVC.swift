@@ -14,16 +14,16 @@ public protocol GIGScannerOutput {
 	func didSuccessfullyScan(_ scannedValue: String, type: String)
 }
 
-open class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOutputObjectsDelegate {
+public class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOutputObjectsDelegate {
 	
-	open var scannerOutput: GIGScannerOutput?
+	public var scannerOutput: GIGScannerOutput?
 	var captureSession: AVCaptureSession?
 	var previewLayer: AVCaptureVideoPreviewLayer?
 	var codeFrameView: UIView?
 	// swiftlint:disable:next implicitly_unwrapped_optional
 	var captureDevice: AVCaptureDevice!
 	
-	override open func viewDidLoad() {
+	override public func viewDidLoad() {
 		super.viewDidLoad()
 		self.captureDevice = AVCaptureDevice.default(for: AVMediaType.video)
 		

@@ -48,9 +48,9 @@ public extension LoggableModule {
 }
 
 public class LogManagerSettings {
-    open var logLevel: LogLevel
-    open var logStyle: LogStyle
-    open var moduleName: String?
+    public var logLevel: LogLevel
+    public var logStyle: LogStyle
+    public var moduleName: String?
     
     public init(moduleName: String? = nil, logLevel: LogLevel = .none, logStyle: LogStyle = .none) {
         self.moduleName = moduleName
