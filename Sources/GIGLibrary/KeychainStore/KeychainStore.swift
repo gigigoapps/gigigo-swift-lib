@@ -218,34 +218,51 @@ open class KeychainStore {
         query[KeychainConstants.AttributeAccount] = key
         query[KeychainConstants.UseAuthenticationContext] = interactionNotAllowedContext()
 
-        var status = SecItemCopyMatching(query as CFDictionary, nil)
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
         switch status {
         case errSecSuccess, errSecInteractionNotAllowed:
-            var query = self.options.query()
-            query[KeychainConstants.AttributeAccount] = key
+            if self.options.authenticationPolicy != nil {
+                // A `SecAccessControl` (`kSecAttrAccessControl`) can only be applied via
+                // `SecItemAdd` — it is add-only for `SecItemUpdate`. Updating in place
+                // would refresh the value while leaving the existing item's protection
+                // untouched, so upgrading an unprotected/plain item to a policy-gated one
+                // would silently leave it readable without the requested biometric/passcode
+                // gate. Recreate the item so the access control is actually applied.
+                try self.remove(key, ignoringAttributeSynchronizable: ignoringAttributeSynchronizable)
+                try self.add(value, key: key)
+            } else {
+                var updateQuery = self.options.query()
+                updateQuery[KeychainConstants.AttributeAccount] = key
 
-            var (attributes, error) = self.options.attributes(key: nil, value: value)
-            if let error { throw error }
+                var (attributes, error) = self.options.attributes(key: nil, value: value)
+                if let error { throw error }
 
-            self.options.attributes.forEach { attributes.updateValue($1, forKey: $0) }
+                self.options.attributes.forEach { attributes.updateValue($1, forKey: $0) }
 
-            status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-            if status != errSecSuccess {
-                throw self.securityError(status: status)
+                let updateStatus = SecItemUpdate(updateQuery as CFDictionary, attributes as CFDictionary)
+                if updateStatus != errSecSuccess {
+                    throw self.securityError(status: updateStatus)
+                }
             }
         case errSecItemNotFound:
-            var (attributes, error) = self.options.attributes(key: key, value: value)
-            if let error {
-                throw error
-            }
-
-            self.options.attributes.forEach { attributes.updateValue($1, forKey: $0) }
-
-            status = SecItemAdd(attributes as CFDictionary, nil)
-            if status != errSecSuccess {
-                throw self.securityError(status: status)
-            }
+            try self.add(value, key: key)
         default:
+            throw self.securityError(status: status)
+        }
+    }
+
+    /// Builds the full item attributes and inserts it with `SecItemAdd`. Used both
+    /// for a brand-new key and to recreate an item whose protection must be
+    /// (re)applied (see `set`), since `kSecAttrAccessControl` cannot be set through
+    /// `SecItemUpdate`.
+    private func add(_ value: Data, key: String) throws {
+        var (attributes, error) = self.options.attributes(key: key, value: value)
+        if let error { throw error }
+
+        self.options.attributes.forEach { attributes.updateValue($1, forKey: $0) }
+
+        let status = SecItemAdd(attributes as CFDictionary, nil)
+        if status != errSecSuccess {
             throw self.securityError(status: status)
         }
     }
