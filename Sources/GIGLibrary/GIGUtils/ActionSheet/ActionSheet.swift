@@ -8,7 +8,7 @@
 
 import UIKit
 
-open class ActionSheet: AlertController {
+public final class ActionSheet: AlertController {
     
     public override init(title: String, message: String) {
         super.init(title: title, message: message, style: .actionSheet)

@@ -10,7 +10,7 @@ import Foundation
 import UIKit
 
 @MainActor
-open class AlertController: NSObject, AlertInterface {
+public class AlertController: NSObject, AlertInterface {
     
     var alert: UIAlertController
     
@@ -26,11 +26,11 @@ open class AlertController: NSObject, AlertInterface {
         self.alert = UIAlertController(title: title, message: message, preferredStyle: style)
     }
     
-    open func show() {
+    public func show() {
 		Application().presentModal(self.alert)
     }
     
-    open func addDefaultButton(_ title: String, usingAction: ((String) -> Void)?) {
+    public func addDefaultButton(_ title: String, usingAction: ((String) -> Void)?) {
         let action = UIAlertAction(title: title, style: .default) { action in
 			guard let usingAction else { return }
             usingAction(action.title ?? "")
@@ -38,7 +38,7 @@ open class AlertController: NSObject, AlertInterface {
         self.alert.addAction(action)
     }
     
-    open func addCancelButton(_ title: String, usingAction: ((String) -> Void)?) {
+    public func addCancelButton(_ title: String, usingAction: ((String) -> Void)?) {
         let action = UIAlertAction(title: title, style: .cancel) { action in
 			guard let usingAction else { return }
             usingAction(action.title ?? "")
@@ -46,7 +46,7 @@ open class AlertController: NSObject, AlertInterface {
         self.alert.addAction(action)
     }
     
-    open func addDestructiveButton(_ title: String, usingAction: ((String) -> Void)?) {
+    public func addDestructiveButton(_ title: String, usingAction: ((String) -> Void)?) {
         let action = UIAlertAction(title: title, style: .destructive) { action in
 			guard let usingAction else { return }
             usingAction(action.title ?? "")

@@ -10,7 +10,7 @@ import Foundation
 import Security
 import LocalAuthentication
 
-open class KeychainStore {
+public final class KeychainStore {
 
     public var service: String {
         return self.options.service
@@ -430,7 +430,7 @@ open class KeychainStore {
 
     // MARK: Items
 
-    public class func allKeys() -> [(String, String)] {
+    public static func allKeys() -> [(String, String)] {
         var query = [String: Any]()
         query[KeychainConstants.Class] = KeychainConstants.ClassGenericPassword
         query[KeychainConstants.AttributeSynchronizable] = KeychainConstants.SynchronizableAny
@@ -465,7 +465,7 @@ open class KeychainStore {
         return allItems.compactMap(filter)
     }
 
-    public class func allItems() -> [[String: Any]] {
+    public static func allItems() -> [[String: Any]] {
         var query = [String: Any]()
         query[KeychainConstants.Class] = KeychainConstants.ClassGenericPassword
         query[KeychainConstants.MatchLimit] = KeychainConstants.MatchLimitAll
@@ -518,7 +518,7 @@ open class KeychainStore {
         return []
     }
 
-    fileprivate class func prettify(items: [[String: Any]]) -> [[String: Any]] {
+    fileprivate static func prettify(items: [[String: Any]]) -> [[String: Any]] {
         return items.map { attributes -> [String: Any] in
             var item = [String: Any]()
 
@@ -557,7 +557,7 @@ open class KeychainStore {
     }
 
     @discardableResult
-    fileprivate class func securityError(status: OSStatus) -> Error {
+    fileprivate static func securityError(status: OSStatus) -> Error {
         return Status(status: status)
     }
 

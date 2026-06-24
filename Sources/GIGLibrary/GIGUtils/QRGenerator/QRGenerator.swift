@@ -11,16 +11,16 @@ import UIKit
 import CoreImage.CIFilterBuiltins
 
 // swiftlint:disable:next type_name
-open class QR {
+public final class QR {
     
-	open class func generate(_ string: String) -> UIImage? {
+	public static func generate(_ string: String) -> UIImage? {
 		guard let outputImage: CGImage = self.generate(string) else { return nil }
 		
 		return UIImage(cgImage: outputImage)
 	}
 	
 	@MainActor
-	open class func generate(_ string: String, onView: UIImageView) {
+	public static func generate(_ string: String, onView: UIImageView) {
 		guard let image: CGImage = self.generate(string) else { return }
 		
         let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
@@ -42,7 +42,7 @@ open class QR {
 	
 	// MARK: - Private Helpers
 	
-	fileprivate class func generate(_ string: String) -> CGImage? {
+	fileprivate static func generate(_ string: String) -> CGImage? {
         let context = CIContext()
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)

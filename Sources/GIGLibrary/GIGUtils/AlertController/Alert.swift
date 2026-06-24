@@ -17,7 +17,7 @@ protocol AlertInterface {
 }
 
 @MainActor
-open class Alert: NSObject {
+public final class Alert: NSObject {
     
     internal let interface: AlertInterface
 
@@ -31,19 +31,19 @@ open class Alert: NSObject {
         super.init()
     }
     
-    open func show() {
+    public func show() {
         self.interface.show()
     }
     
-    open func addDefaultButton(_ title: String, usingAction: ((String) -> Void)?) {
+    public func addDefaultButton(_ title: String, usingAction: ((String) -> Void)?) {
         self.interface.addDefaultButton(title, usingAction: usingAction)
     }
     
-    open func addCancelButton(_ title: String, usingAction: ((String) -> Void)?) {
+    public func addCancelButton(_ title: String, usingAction: ((String) -> Void)?) {
         self.interface.addCancelButton(title, usingAction: usingAction)
     }
     
-    open func addDestructiveButton(_ title: String, usingAction: ((String) -> Void)?) {
+    public func addDestructiveButton(_ title: String, usingAction: ((String) -> Void)?) {
         self.interface.addDestructiveButton(title, usingAction: usingAction)
 
     }

@@ -10,7 +10,7 @@ import Foundation
 import UIKit
 
 @MainActor
-open class Application {
+public final class Application {
 	
 	public init() {
 		// no-op

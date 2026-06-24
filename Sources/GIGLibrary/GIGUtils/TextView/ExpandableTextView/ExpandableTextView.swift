@@ -8,15 +8,15 @@
 
 import UIKit
 
-open class ExpandableTextView: UIView {
+public final class ExpandableTextView: UIView {
     
     // MARK: IBOutlet
-    @IBOutlet weak open var stackView: UIStackView!
-    @IBOutlet weak open var hyperlinkTextView: HyperlinkTextView!
+    @IBOutlet weak public var stackView: UIStackView!
+    @IBOutlet weak public var hyperlinkTextView: HyperlinkTextView!
     
     // MARK: - Public properties
     
-    open var isCollapsed: Bool = true
+    public var isCollapsed: Bool = true
     
     // MARK: - Private properties
     
@@ -32,7 +32,7 @@ open class ExpandableTextView: UIView {
     ///   - shortText: Title for the alert
     ///   - longText: Message for the alert
     /// - Returns: The `ExpandableTextView` instance
-    open class func instantiate(shortText: String, longText: String, hyperlinkDelegate: HyperlinkTextViewDelegate?) -> ExpandableTextView? {
+    public static func instantiate(shortText: String, longText: String, hyperlinkDelegate: HyperlinkTextViewDelegate?) -> ExpandableTextView? {
         let expandableTextView = self.instantiate()
         expandableTextView?.shortText = shortText
         expandableTextView?.longText = longText
@@ -41,14 +41,14 @@ open class ExpandableTextView: UIView {
         return expandableTextView
     }
     
-    open func collapse() {
+    public func collapse() {
         guard !self.isCollapsed else { return }
         self.isCollapsed = true
         guard let shortText = self.shortText else { return }
         self.hyperlinkTextView.setText(htmlText: shortText)
     }
     
-    open func expand() {
+    public func expand() {
         guard self.isCollapsed else { return }
         self.isCollapsed = false
         guard
@@ -59,7 +59,7 @@ open class ExpandableTextView: UIView {
     
     // MARK: - Private methods
     
-    private class func instantiate() -> ExpandableTextView? {
+    private static func instantiate() -> ExpandableTextView? {
         guard let expandableTextView = Bundle(for: ExpandableTextView.self).loadNibNamed("ExpandableTextView", owner: self, options: nil)?.first as? ExpandableTextView else {
             return ExpandableTextView()
         }
