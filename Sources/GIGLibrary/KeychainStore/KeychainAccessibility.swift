@@ -122,3 +122,35 @@ extension KeychainAccessibility: RawRepresentable, CustomStringConvertible {
         }
     }
 }
+
+extension KeychainAccessibility {
+
+    /// The `kSecAttrAccessible` value to hand to the Security framework when
+    /// writing an item (either directly as `kSecAttrAccessible` or as the
+    /// protection class of a `SecAccessControl`).
+    ///
+    /// This is intentionally separate from `rawValue`: `rawValue` is a stable
+    /// identifier used for round-tripping and `description`, whereas this is the
+    /// concrete `CFString` the keychain accepts.
+    ///
+    /// - Note: `.always` and `.alwaysThisDeviceOnly` map to their
+    ///   `afterFirstUnlock` equivalents. The `kSecAttrAccessibleAlways` /
+    ///   `kSecAttrAccessibleAlwaysThisDeviceOnly` constants have been deprecated
+    ///   since iOS 12 and are rejected by the keychain on this library's
+    ///   minimum target (iOS 16) — their `rawValue`s (`"dk"` / `"dku"`) are not
+    ///   even valid `kSecAttrAccessible` values. `afterFirstUnlock` is Apple's
+    ///   recommended replacement (data is available for background use after the
+    ///   first unlock following a restart).
+    var secAttrAccessibleValue: CFString {
+        switch self {
+        case .whenUnlocked:
+            return kSecAttrAccessibleWhenUnlocked
+        case .afterFirstUnlock, .always:
+            return kSecAttrAccessibleAfterFirstUnlock
+        case .whenUnlockedThisDeviceOnly:
+            return kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        case .afterFirstUnlockThisDeviceOnly, .alwaysThisDeviceOnly:
+            return kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        }
+    }
+}
