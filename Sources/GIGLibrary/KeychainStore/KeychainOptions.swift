@@ -30,7 +30,22 @@ struct KeychainOptions {
 
 
 extension KeychainOptions {
-    
+
+    /// Whether the item is actually stored as synchronizable.
+    ///
+    /// iCloud Keychain cannot synchronize access-control (policy-gated) items
+    /// nor any device-local (`...ThisDeviceOnly`) protection class — combining
+    /// either with `kSecAttrSynchronizable = true` is rejected by the keychain
+    /// with `errSecParam`. So a requested `synchronizable` is honored only when
+    /// neither constraint applies. This is the single source of truth used for
+    /// both the stored attribute (`attributes`) and strict
+    /// (`ignoringAttributeSynchronizable: false`) lookups (`query`), so writes
+    /// and matches stay consistent.
+    var effectiveSynchronizable: Bool {
+        guard self.synchronizable else { return false }
+        return self.authenticationPolicy == nil && !self.accessibility.isThisDeviceOnly
+    }
+
     func query(ignoringAttributeSynchronizable: Bool = true) -> [String: Any] {
         var query = [String: Any]()
 
@@ -43,7 +58,7 @@ extension KeychainOptions {
         if ignoringAttributeSynchronizable {
             query[KeychainConstants.AttributeSynchronizable] = KeychainConstants.SynchronizableAny
         } else {
-            query[KeychainConstants.AttributeSynchronizable] = self.synchronizable ? kCFBooleanTrue : kCFBooleanFalse
+            query[KeychainConstants.AttributeSynchronizable] = self.effectiveSynchronizable ? kCFBooleanTrue : kCFBooleanFalse
         }
 
         if let authenticationContext = self.authenticationContext {
@@ -94,14 +109,15 @@ extension KeychainOptions {
                 return (attributes, error)
             }
             attributes[KeychainConstants.AttributeAccessControl] = accessControl
-            // Policy-gated items are device-local: iCloud Keychain cannot sync them,
-            // and combining an access control with `synchronizable = true` makes the
-            // keychain reject the item (errSecParam). Force them non-synchronizable.
-            attributes[KeychainConstants.AttributeSynchronizable] = kCFBooleanFalse
         } else {
             attributes[KeychainConstants.AttributeAccessible] = self.accessibility.secAttrAccessibleValue
-            attributes[KeychainConstants.AttributeSynchronizable] = self.synchronizable ? kCFBooleanTrue : kCFBooleanFalse
         }
+
+        // `effectiveSynchronizable` forces non-synchronizable for access-control
+        // and device-local items, which the keychain refuses to synchronize
+        // (errSecParam). Written here for both branches so it matches the strict
+        // lookup in `query(ignoringAttributeSynchronizable: false)`.
+        attributes[KeychainConstants.AttributeSynchronizable] = self.effectiveSynchronizable ? kCFBooleanTrue : kCFBooleanFalse
 
         return (attributes, nil)
     }

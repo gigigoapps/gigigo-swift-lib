@@ -129,6 +129,50 @@ struct KeychainOptionsTests {
         #expect((attributes[KeychainConstants.AttributeSynchronizable] as? Bool) == false)
     }
 
+    @Test("Device-local accessibility forces the item non-synchronizable even if synchronizable was requested")
+    func deviceOnlyAccessibilityForcesNonSynchronizable() throws {
+        // iCloud Keychain rejects synchronizing any ...ThisDeviceOnly protection class.
+        let deviceOnly: [KeychainAccessibility] = [
+            .whenUnlockedThisDeviceOnly,
+            .afterFirstUnlockThisDeviceOnly,
+            .alwaysThisDeviceOnly,
+            .whenPasscodeSetThisDeviceOnly
+        ]
+        for accessibility in deviceOnly {
+            let options = makeOptions(accessibility: accessibility, synchronizable: true)
+            let (attributes, _) = options.attributes(key: "token", value: Data("v".utf8))
+            #expect((attributes[KeychainConstants.AttributeSynchronizable] as? Bool) == false)
+        }
+
+        // A non-device-local class still honors the flag.
+        let syncable = makeOptions(accessibility: .whenUnlocked, synchronizable: true)
+        let (syncAttributes, _) = syncable.attributes(key: "token", value: Data("v".utf8))
+        #expect((syncAttributes[KeychainConstants.AttributeSynchronizable] as? Bool) == true)
+    }
+
+    @Test("Strict query synchronizable matches what attributes() writes")
+    func strictQuerySynchronizableMatchesWrite() throws {
+        // (accessibility, authenticationPolicy, requested-synchronizable) -> expected stored synchronizable
+        func assertConsistent(
+            _ accessibility: KeychainAccessibility,
+            policy: KeychainAuthenticationPolicy?,
+            requested: Bool,
+            expected: Bool
+        ) {
+            let options = makeOptions(accessibility: accessibility, authenticationPolicy: policy, synchronizable: requested)
+            let (attributes, _) = options.attributes(key: "token", value: Data("v".utf8))
+            let strictQuery = options.query(ignoringAttributeSynchronizable: false)
+
+            #expect((attributes[KeychainConstants.AttributeSynchronizable] as? Bool) == expected)
+            #expect((strictQuery[KeychainConstants.AttributeSynchronizable] as? Bool) == expected)
+        }
+
+        assertConsistent(.whenUnlocked, policy: nil, requested: true, expected: true)
+        assertConsistent(.whenUnlocked, policy: nil, requested: false, expected: false)
+        assertConsistent(.whenUnlockedThisDeviceOnly, policy: nil, requested: true, expected: false)
+        assertConsistent(.whenUnlockedThisDeviceOnly, policy: .biometryAny, requested: true, expected: false)
+    }
+
     // MARK: - Other attributes
 
     @Test("The value data is always written")

@@ -63,5 +63,6 @@ KeychainStore.allItems()               // [[String: Any]] across all
 
 - Throwing methods must be wrapped in `try`/`do-catch`; use subscript accessors when error handling is not critical
 - `.accessibility(.whenPasscodeSetThisDeviceOnly, ...)` requires a device passcode: `set` throws if none is set, and the item is deleted if the user later removes the passcode. It never migrates to another device.
-- Combining an `authenticationPolicy` with `.synchronizable(true)` is invalid — policy-gated items are device-local and are stored non-synchronizable regardless of the flag.
+- `.synchronizable(true)` is only honored for non-device-local protection classes without an `authenticationPolicy`. Policy-gated items and any `...ThisDeviceOnly` / `.whenPasscodeSetThisDeviceOnly` accessibility cannot be synced (iCloud Keychain rejects them with `errSecParam`), so they are stored non-synchronizable regardless of the flag — and strict (`ignoringAttributeSynchronizable: false`) lookups match that.
+- `.always` / `.alwaysThisDeviceOnly` no longer grant before-first-unlock access: the deprecated `kSecAttrAccessibleAlways*` classes are rejected on iOS 16+, so they map to their `afterFirstUnlock` equivalents. Prefer `.afterFirstUnlock(ThisDeviceOnly)` explicitly.
 - `setLogValues(forModule:)` in `LogManager` throws if the module is registered twice — call `removeSettingsForModule` before re-registering (unrelated but often paired with Keychain setup)
