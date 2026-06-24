@@ -15,6 +15,7 @@ struct KeychainConstants {
 
     /** Attribute Key Constants */
     static let AttributeAccessible = String(kSecAttrAccessible)
+    static let AttributeAccessControl = String(kSecAttrAccessControl)
     static let AttributeAccessGroup = String(kSecAttrAccessGroup)
     static let AttributeSynchronizable = String(kSecAttrSynchronizable)
     static let AttributeCreationDate = String(kSecAttrCreationDate)

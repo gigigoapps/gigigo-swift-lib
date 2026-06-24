@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Security
 
 struct KeychainOptions {
     
@@ -68,6 +69,28 @@ extension KeychainOptions {
         }
         if let comment = self.comment {
             attributes[KeychainConstants.AttributeComment] = comment
+        }
+
+        // Protection class. When an authentication policy is requested we build a
+        // `SecAccessControl` (`kSecAttrAccessControl`); otherwise we write the
+        // plain `kSecAttrAccessible` value. The two are mutually exclusive — the
+        // keychain rejects an item that carries both — so we never set them
+        // together.
+        if let authenticationPolicy = self.authenticationPolicy {
+            var accessControlError: Unmanaged<CFError>?
+            let flags = SecAccessControlCreateFlags(rawValue: authenticationPolicy.rawValue)
+            guard let accessControl = SecAccessControlCreateWithFlags(
+                nil,
+                self.accessibility.secAttrAccessibleValue,
+                flags,
+                &accessControlError
+            ) else {
+                let error: Error = (accessControlError?.takeRetainedValue().error as Error?) ?? Status.unexpectedError
+                return (attributes, error)
+            }
+            attributes[KeychainConstants.AttributeAccessControl] = accessControl
+        } else {
+            attributes[KeychainConstants.AttributeAccessible] = self.accessibility.secAttrAccessibleValue
         }
 
         attributes[KeychainConstants.AttributeSynchronizable] = self.synchronizable ? kCFBooleanTrue : kCFBooleanFalse
