@@ -76,13 +76,20 @@ struct ImageDownloaderTests {
     func successReleasesSlotAndCaches() async {
         ImageDownloader.resetForTesting()
         let urlString = "https://example.com/success.png"
-        registerImageResponse(path: "/success.png")
+        // Inject a PNG response directly instead of going through URLSession, whose stalls under CI
+        // load (NSURLError -1001) made this test flaky. The success path (decode → resize → cache)
+        // still runs for real. The Response's `url` is only nominal — the cache key is
+        // `request.baseURL` — so any valid URL works. See `ImageDownloader.fetchProvider`.
+        ImageDownloader.fetchProvider = { _ in
+            makeImageResponse(body: makePNGData(), url: URL(fileURLWithPath: "/success.png"))
+        }
 
         let view = makeImageView()
         ImageDownloader.shared.download(url: urlString, for: view, placeholder: nil)
         #expect(ImageDownloader.activeDownloads == 1)
 
-        // The slot is freed as soon as the network finishes; the image is cached after the resize.
+        // The slot is freed as soon as the (mocked) network finishes; the image is cached after the
+        // resize completes on the cooperative pool.
         let cached = await waitUntil { ImageDownloader.images[urlString] != nil }
         #expect(cached)
         #expect(ImageDownloader.activeDownloads == 0)
@@ -208,14 +215,6 @@ struct ImageDownloaderTests {
 
     // MARK: - Helpers
 
-    /// Registers a mock route returning a valid PNG for `path`, and points the downloader at a
-    /// `Request` backed by the mock `URLSession`. Use when the test needs the success path
-    /// (image decoding + resize + caching).
-    private func registerImageResponse(path: String) {
-        MockURLProtocol.respond(path: path, statusCode: 200, headers: nil, data: makePNGData())
-        ImageDownloader.requestProvider = { url in Request.testRequest(baseUrl: url, endpoint: "") }
-    }
-
     /// Points the downloader at requests that fail fast in `preChecks` (reachability off), so each
     /// download finishes immediately via the error path WITHOUT touching `URLSession` or the resize.
     /// Use for tests that only assert the slot counter / queue: the mechanics of `pump`/the counter
@@ -270,6 +269,7 @@ extension ImageDownloader {
         activeDownloads = 0
         maxConcurrentDownloads = 6  // setter clamps and pumps (a no-op while the stack is empty)
         requestProvider = { url in Request(method: .get, baseUrl: url, endpoint: "", bodyParams: nil) }
+        fetchProvider = { request in await request.fetch() }
     }
 }
 

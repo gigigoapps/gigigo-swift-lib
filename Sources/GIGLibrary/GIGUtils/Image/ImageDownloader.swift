@@ -27,6 +27,15 @@ struct ImageDownloader {
     static var requestProvider: (_ url: String) -> Request = { url in
         Request(method: .get, baseUrl: url, endpoint: "", bodyParams: nil)
     }
+
+    /// Seam used only by DEBUG builds so tests can supply a `Response` directly instead of letting
+    /// the request hit `URLSession`. The real `URLSession` can stall under CI load (surfacing as
+    /// `-1001` timeouts), which made the success-path test flaky; injecting a `Response` carrying
+    /// the image bytes keeps that test deterministic while still exercising the real decode → resize
+    /// → cache. It does not exist in release builds — see `startDownload(for:)`.
+    static var fetchProvider: (_ request: Request) async -> Response = { request in
+        await request.fetch()
+    }
     #endif
 
     /// Backing store for `maxConcurrentDownloads`, always clamped to a minimum of 1.
@@ -121,7 +130,11 @@ struct ImageDownloader {
                 self.finishDownload()
                 return
             }
+            #if DEBUG
+            let response = await ImageDownloader.fetchProvider(request)
+            #else
             let response = await request.fetch()
+            #endif
             self.handleResponse(response, view: view, request: request)
         }
     }
