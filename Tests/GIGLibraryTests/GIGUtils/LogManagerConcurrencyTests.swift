@@ -89,4 +89,34 @@ struct LogManagerConcurrencyTests {
         // concurrent task ran to completion.
         #expect(completed == iterations * taskCount)
     }
+
+    @Test("Given a log handler that mutates the manager, when it runs inside a log call, then it does not deadlock")
+    func logHandlerMutatingManagerDoesNotDeadlock() {
+        let manager = LogManager.shared
+
+        let originalLevel = manager.logLevel
+        let originalName = manager.appName
+        let originalStyle = manager.logStyle
+        defer {
+            manager.logLevel = originalLevel
+            manager.appName = originalName
+            manager.logStyle = originalStyle
+        }
+
+        manager.logLevel = .debug
+
+        // The handler runs as part of the log call. Now that the accessors are
+        // synchronized, mutating one from the handler re-enters the manager's
+        // serial queue — which would deadlock if the handler were invoked while
+        // the queue was still held. Reaching the assertion proves it is not.
+        var handlerRan = false
+        gigLogDebug("reentrancy probe", handler: { _ in
+            manager.logLevel = .error
+            manager.appName = "Reentrant"
+            _ = manager.defaultSettings
+            handlerRan = true
+        })
+
+        #expect(handlerRan)
+    }
 }
