@@ -148,6 +148,32 @@ struct LogManagerConcurrencyTests {
 
         #expect(handlerRan)
     }
+
+    @Test("Given the value set into or read from defaultSettings, when a caller mutates it, then the manager keeps its own copy")
+    func defaultSettingsExchangesCopies() {
+        let manager = LogManager.shared
+
+        let originalLevel = manager.logLevel
+        let originalStyle = manager.logStyle
+        defer {
+            manager.logLevel = originalLevel
+            manager.logStyle = originalStyle
+        }
+
+        // Set path: mutating the object after assigning it must not leak into the
+        // manager (the setter stores a copy).
+        let incoming = LogManagerSettings(logLevel: .error, logStyle: .none)
+        manager.defaultSettings = incoming
+        incoming.logLevel = .debug
+        #expect(manager.logLevel == .error)
+
+        // Get path: mutating the returned object must not reach the manager's
+        // internal storage (the getter returns a copy), so it cannot race the
+        // synchronized log path.
+        let outgoing = manager.defaultSettings
+        outgoing.logLevel = .debug
+        #expect(manager.logLevel == .error)
+    }
 }
 
 /// A module whose identifier reaches back into a synchronized `LogManager`
