@@ -47,7 +47,7 @@ public extension LoggableModule {
     }
 }
 
-public struct LogManagerSettings: Sendable {
+public class LogManagerSettings {
     public var logLevel: LogLevel
     public var logStyle: LogStyle
     public var moduleName: String?
@@ -65,12 +65,9 @@ public struct LogManagerSettings: Sendable {
 /// wrapper around `queue.sync`: when the caller already runs on `queue` (a log
 /// `handler`, or a custom `LoggableModule.Identifier` that reaches back into an
 /// accessor) the work runs directly instead of dead-locking on the non-reentrant
-/// serial queue. `LogManagerSettings` is a value type and `defaultSettings` is
-/// read-only, so callers cannot reach the internal storage to mutate it
-/// off-queue; per-field changes go through the individual `logLevel`/`appName`/
-/// `logStyle` setters, each an atomic step on `queue`. That queue-based isolation
-/// — which the compiler cannot verify on its own — is what justifies the
-/// `@unchecked Sendable` conformance.
+/// serial queue. Every read and write the library performs on the settings is
+/// serialized on `queue`; that isolation — which the compiler cannot verify on
+/// its own — is what justifies the `@unchecked Sendable` conformance.
 public class LogManager: @unchecked Sendable {
     public static let shared = LogManager()
 
@@ -101,12 +98,13 @@ public class LogManager: @unchecked Sendable {
 
     // MARK: - Default log settings
 
-    /// A snapshot of the default settings. Read-only: mutate individual fields
-    /// through the `logLevel`/`appName`/`logStyle` setters, which are atomic and
-    /// independent. A whole-value setter would turn `defaultSettings.field = x`
-    /// into a get-copy-mutate-set that could clobber a concurrent field write.
     public var defaultSettings: LogManagerSettings {
-        return self.sync { self._defaultSettings }
+        get {
+            return self.sync { self._defaultSettings }
+        }
+        set {
+            self.sync { self._defaultSettings = newValue }
+        }
     }
 
     public var logLevel: LogLevel {
@@ -305,7 +303,7 @@ public class LogManager: @unchecked Sendable {
     }
     
     private func setLogValuesNonSynchronized(logLevel: LogLevel = .none, logStyle: LogStyle = .none, forModule module: LoggableModule.Type) throws {
-        guard var settings = self.settingsForModuleNonSynchronized(module) else {
+        guard let settings = self.settingsForModuleNonSynchronized(module) else {
             let settings = LogManagerSettings(logLevel: logLevel, logStyle: logStyle)
             try self.addSettignsNonSynchonized(settings, forModule: module)
             return

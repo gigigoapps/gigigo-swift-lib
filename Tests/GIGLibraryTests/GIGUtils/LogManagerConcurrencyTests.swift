@@ -125,9 +125,17 @@ struct LogManagerConcurrencyTests {
         let manager = LogManager.shared
 
         let originalLevel = manager.logLevel
-        defer { manager.logLevel = originalLevel }
+        let originalName = manager.appName
+        defer {
+            manager.logLevel = originalLevel
+            manager.appName = originalName
+        }
 
         manager.logLevel = .debug
+        // Clear the default module name so the `moduleName ?? module?.Identifier`
+        // fallback actually evaluates `ReentrantIdentifierModule.Identifier`,
+        // exercising the reentrant-accessor path this test protects.
+        manager.appName = nil
 
         // logDebug evaluates `module.Identifier` while holding the serial queue,
         // and that identifier reads `logLevel` (a synchronized accessor). The
