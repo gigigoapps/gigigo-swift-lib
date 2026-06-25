@@ -189,73 +189,84 @@ public class LogManager: @unchecked Sendable {
     
     // MARK: - Logging
 
+    // The formatted line is built (and printed) inside `queue.sync`, but the
+    // optional `handler` is invoked OUTSIDE the lock. A handler may call back
+    // into the synchronized accessors (e.g. set `logLevel` to stop logging after
+    // capturing a line); doing so while the non-reentrant serial queue is still
+    // held would deadlock.
+
     public func log(_ module: LoggableModule.Type?, message: String, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
-        self.queue.sync {
+        let logMessage: String? = self.queue.sync {
             let settings = self.getSettingsForModuleNonSynchronized(module)
-            guard settings.logLevel != .none else { return }
+            guard settings.logLevel != .none else { return nil }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
             let debugMessage = "[\(moduleName)]::" + message
             print(debugMessage)
-            handler?(debugMessage)
+            return debugMessage
         }
+        if let logMessage { handler?(logMessage) }
     }
-    
+
     public func logInfo(_ module: LoggableModule.Type?, message: String, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
-        self.queue.sync {
+        let logMessage: String? = self.queue.sync {
             let settings = self.getSettingsForModuleNonSynchronized(module)
-            guard settings.logLevel >= .info else { return }
+            guard settings.logLevel >= .info else { return nil }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
             let className = filename.lastPathComponent.components(separatedBy: ".").first ?? filename.lastPathComponent
             let emoji = (settings.logStyle == .funny) ? " ⓘ" : ""
             let caller = "[Info\(emoji)] \(className)(\(line)) - \(funcname): "
             let debugMessage = "[\(moduleName)]::\(caller)::" + message
             print(debugMessage)
-            handler?(debugMessage)
+            return debugMessage
         }
+        if let logMessage { handler?(logMessage) }
     }
-    
+
     public func logDebug(_ module: LoggableModule.Type?, message: String, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
-        self.queue.sync {
+        let logMessage: String? = self.queue.sync {
             let settings = self.getSettingsForModuleNonSynchronized(module)
-            guard settings.logLevel >= .debug else { return }
+            guard settings.logLevel >= .debug else { return nil }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
             let className = filename.lastPathComponent.components(separatedBy: ".").first ?? filename.lastPathComponent
             let emoji = (settings.logStyle == .funny) ? " 🐛" : ""
             let caller = "[Debug\(emoji)] \(className)(\(line)) - \(funcname): "
             let debugMessage = "[\(moduleName)]::\(caller)::" + message
             print(debugMessage)
-            handler?(debugMessage)
+            return debugMessage
         }
+        if let logMessage { handler?(logMessage) }
     }
-    
+
     public func logError(_ module: LoggableModule.Type?, error: Error?, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
-        self.queue.sync {
+        let logMessage: String? = self.queue.sync {
             let settings = self.getSettingsForModuleNonSynchronized(module)
             guard settings.logLevel >= .error,
                 let err = error
-                else { return }
+                else { return nil }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
             let className = filename.lastPathComponent.components(separatedBy: ".").first ?? filename.lastPathComponent
             let emoji = (settings.logStyle == .funny) ? " 🔥" : ""
             let caller = "[Error\(emoji)] \(className)(\(line)) - \(funcname): \(err.localizedDescription)"
             let debugMessage = "[\(moduleName)]::\(caller)"
             print(debugMessage)
-            handler?(debugMessage)
+            return debugMessage
         }
+        if let logMessage { handler?(logMessage) }
     }
-    
+
     public func logWarn(_ module: LoggableModule.Type?, message: String, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
-        self.queue.sync {
+        let logMessage: String? = self.queue.sync {
             let settings = self.getSettingsForModuleNonSynchronized(module)
-            guard settings.logLevel >= .error else { return }
+            guard settings.logLevel >= .error else { return nil }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
             let className = filename.lastPathComponent.components(separatedBy: ".").first ?? filename.lastPathComponent
             let emoji = (settings.logStyle == .funny) ? " 🔥" : ""
             let caller = "[Warn\(emoji)] \(className)(\(line)) - \(funcname): "
             let debugMessage = "[\(moduleName)]::\(caller)::" + message
             print(debugMessage)
-            handler?(debugMessage)
+            return debugMessage
         }
+        if let logMessage { handler?(logMessage) }
     }
     
     // MARK: - Private helpers
