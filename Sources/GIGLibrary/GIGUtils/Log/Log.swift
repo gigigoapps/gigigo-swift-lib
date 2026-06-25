@@ -9,7 +9,7 @@
 import Foundation
 
 
-public enum LogLevel: Int {
+public enum LogLevel: Int, Sendable {
     /// No log will be shown.
     case none = 0
     
@@ -23,7 +23,7 @@ public enum LogLevel: Int {
     case debug = 3
 }
 
-public enum LogStyle: Int {
+public enum LogStyle: Int, Sendable {
     
     /// Profesional style no emojis
     case  none = 0
@@ -47,11 +47,11 @@ public extension LoggableModule {
     }
 }
 
-public class LogManagerSettings {
+public struct LogManagerSettings: Sendable {
     public var logLevel: LogLevel
     public var logStyle: LogStyle
     public var moduleName: String?
-    
+
     public init(moduleName: String? = nil, logLevel: LogLevel = .none, logStyle: LogStyle = .none) {
         self.moduleName = moduleName
         self.logLevel = logLevel
@@ -59,48 +59,72 @@ public class LogManagerSettings {
     }
 }
 
+/// Thread-safe logging singleton. Its mutable storage (`_defaultSettings`,
+/// `settingsById`, `modules`) is only ever read or written inside `queue`, and
+/// every public accessor (`logLevel`, `appName`, `logStyle`, `defaultSettings`)
+/// funnels through `queue.sync`. `LogManagerSettings` is a value type, so the
+/// accessors exchange copies and callers can never reach the internal storage to
+/// mutate it off-queue. That queue-based isolation — which the compiler cannot
+/// verify on its own — is what justifies the `@unchecked Sendable` conformance.
+///
+/// Each accessor is synchronized individually; a read-modify-write spanning
+/// several accessors (or several field writes) is not atomic as a group. That
+/// can never corrupt memory, but under concurrency a compound update may be lost.
 public class LogManager: @unchecked Sendable {
     public static let shared = LogManager()
-    public var defaultSettings: LogManagerSettings
-    
+
+    private var _defaultSettings: LogManagerSettings
     private var settingsById: [String: LogManagerSettings]
     private var modules: [LoggableModule.Type]
     private let queue: DispatchQueue
-    
+
     private init() {
-        self.defaultSettings = LogManagerSettings()
+        self._defaultSettings = LogManagerSettings()
         self.settingsById = [String: LogManagerSettings]()
         self.modules = [LoggableModule.Type]()
         self.queue = DispatchQueue(label: "com.gigigo.log", qos: .utility)
     }
-    
+
+    // MARK: - Default log settings
+
+    public var defaultSettings: LogManagerSettings {
+        get {
+            return self.queue.sync { self._defaultSettings }
+        }
+        set {
+            self.queue.sync { self._defaultSettings = newValue }
+        }
+    }
+
     public var logLevel: LogLevel {
         get {
-            return self.defaultSettings.logLevel
+            return self.queue.sync { self._defaultSettings.logLevel }
         }
         set {
-            self.defaultSettings.logLevel = newValue
+            self.queue.sync { self._defaultSettings.logLevel = newValue }
         }
     }
-    
+
     public var appName: String? {
         get {
-            return self.defaultSettings.moduleName
+            return self.queue.sync { self._defaultSettings.moduleName }
         }
         set {
-            self.defaultSettings.moduleName = newValue
+            self.queue.sync { self._defaultSettings.moduleName = newValue }
         }
     }
-    
+
     public var logStyle: LogStyle {
         get {
-            return self.defaultSettings.logStyle
+            return self.queue.sync { self._defaultSettings.logStyle }
         }
         set {
-            self.defaultSettings.logStyle = newValue
+            self.queue.sync { self._defaultSettings.logStyle = newValue }
         }
     }
-    
+
+    // MARK: - Per-module settings
+
     public func setLogValues(logLevel: LogLevel = .none, logStyle: LogStyle = .none, forModule module: LoggableModule.Type) throws {
         try self.queue.sync {
             try self.setLogValuesNonSynchronized(logLevel: logLevel, logStyle: logStyle, forModule: module)
@@ -139,8 +163,6 @@ public class LogManager: @unchecked Sendable {
         }
     }
     
-    // SETTINGS SECTION
-    
     public func settingsForModule(_ module: LoggableModule.Type) -> LogManagerSettings? {
         return self.queue.sync {
             return self.settingsForModuleNonSynchronized(module)
@@ -165,8 +187,8 @@ public class LogManager: @unchecked Sendable {
         }
     }
     
-    // LOG FUNCTIONS
-    
+    // MARK: - Logging
+
     public func log(_ module: LoggableModule.Type?, message: String, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
         self.queue.sync {
             let settings = self.getSettingsForModuleNonSynchronized(module)
@@ -236,13 +258,13 @@ public class LogManager: @unchecked Sendable {
         }
     }
     
-    // PRIVATE SECTION
-    
+    // MARK: - Private helpers
+
     private func getSettingsForModuleNonSynchronized(_ module: LoggableModule.Type?) -> LogManagerSettings {
         if let module, let moduleSettings = self.settingsForModuleNonSynchronized(module) {
             return moduleSettings
         }
-        return self.defaultSettings
+        return self._defaultSettings
     }
     
     private func settingsForModuleNonSynchronized(_ module: LoggableModule.Type) -> LogManagerSettings? {
@@ -264,7 +286,7 @@ public class LogManager: @unchecked Sendable {
     }
     
     private func setLogValuesNonSynchronized(logLevel: LogLevel = .none, logStyle: LogStyle = .none, forModule module: LoggableModule.Type) throws {
-        guard let settings = self.settingsForModuleNonSynchronized(module) else {
+        guard var settings = self.settingsForModuleNonSynchronized(module) else {
             let settings = LogManagerSettings(logLevel: logLevel, logStyle: logStyle)
             try self.addSettignsNonSynchonized(settings, forModule: module)
             return
@@ -276,7 +298,7 @@ public class LogManager: @unchecked Sendable {
     }
 }
 
-// COMPATIBILITY LOG METHODS
+// MARK: - Compatibility log functions
 
 public func Log(_ log: String, filename: NSString = #file, line: Int = #line, funcname: String = #function) {
     gigLog(log, module: nil, filename: filename, line: line, funcname: funcname)
@@ -298,7 +320,7 @@ public func LogError(_ error: NSError?, filename: NSString = #file, line: Int = 
     gigLogError(error, module: nil, filename: filename, line: line, funcname: funcname)
 }
 
-// NEW LOG METHODS
+// MARK: - Log functions
 
 public func gigLog(_ log: String, module: LoggableModule.Type? = nil, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
     LogManager.shared.log(module, message: log, filename: filename, line: line, funcname: funcname, handler: handler)
