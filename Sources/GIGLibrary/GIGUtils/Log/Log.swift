@@ -98,12 +98,19 @@ public class LogManager: @unchecked Sendable {
 
     // MARK: - Default log settings
 
+    /// The default settings. The getter returns an independent copy and the
+    /// setter stores one, so the manager never shares its internal instance:
+    /// a caller cannot reach it to mutate `logLevel`/`logStyle`/`moduleName`
+    /// off-queue and race the log path. Mutating a value obtained from this
+    /// getter therefore has no effect on the manager — use the `logLevel`,
+    /// `appName` and `logStyle` setters for live per-field changes.
     public var defaultSettings: LogManagerSettings {
         get {
-            return self.sync { self._defaultSettings }
+            return self.sync { self.copy(of: self._defaultSettings) }
         }
         set {
-            self.sync { self._defaultSettings = newValue }
+            let snapshot = self.copy(of: newValue)
+            self.sync { self._defaultSettings = snapshot }
         }
     }
 
@@ -276,6 +283,16 @@ public class LogManager: @unchecked Sendable {
     }
     
     // MARK: - Private helpers
+
+    /// An independent copy of `settings`, so the manager's internal storage is
+    /// never aliased by a value handed to or returned from `defaultSettings`.
+    private func copy(of settings: LogManagerSettings) -> LogManagerSettings {
+        return LogManagerSettings(
+            moduleName: settings.moduleName,
+            logLevel: settings.logLevel,
+            logStyle: settings.logStyle
+        )
+    }
 
     private func getSettingsForModuleNonSynchronized(_ module: LoggableModule.Type?) -> LogManagerSettings {
         if let module, let moduleSettings = self.settingsForModuleNonSynchronized(module) {
