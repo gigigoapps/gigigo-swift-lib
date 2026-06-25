@@ -60,16 +60,17 @@ public struct LogManagerSettings: Sendable {
 }
 
 /// Thread-safe logging singleton. Its mutable storage (`_defaultSettings`,
-/// `settingsById`, `modules`) is only ever read or written inside `queue`, and
-/// every public accessor (`logLevel`, `appName`, `logStyle`, `defaultSettings`)
-/// funnels through `queue.sync`. `LogManagerSettings` is a value type, so the
-/// accessors exchange copies and callers can never reach the internal storage to
-/// mutate it off-queue. That queue-based isolation — which the compiler cannot
-/// verify on its own — is what justifies the `@unchecked Sendable` conformance.
-///
-/// Each accessor is synchronized individually; a read-modify-write spanning
-/// several accessors (or several field writes) is not atomic as a group. That
-/// can never corrupt memory, but under concurrency a compound update may be lost.
+/// `settingsById`, `modules`) is only ever read or written inside `queue`. All
+/// public accessors and methods funnel through `sync(_:)`, a reentrancy-tolerant
+/// wrapper around `queue.sync`: when the caller already runs on `queue` (a log
+/// `handler`, or a custom `LoggableModule.Identifier` that reaches back into an
+/// accessor) the work runs directly instead of dead-locking on the non-reentrant
+/// serial queue. `LogManagerSettings` is a value type and `defaultSettings` is
+/// read-only, so callers cannot reach the internal storage to mutate it
+/// off-queue; per-field changes go through the individual `logLevel`/`appName`/
+/// `logStyle` setters, each an atomic step on `queue`. That queue-based isolation
+/// — which the compiler cannot verify on its own — is what justifies the
+/// `@unchecked Sendable` conformance.
 public class LogManager: @unchecked Sendable {
     public static let shared = LogManager()
 
@@ -77,62 +78,74 @@ public class LogManager: @unchecked Sendable {
     private var settingsById: [String: LogManagerSettings]
     private var modules: [LoggableModule.Type]
     private let queue: DispatchQueue
+    private let queueKey = DispatchSpecificKey<UInt8>()
 
     private init() {
         self._defaultSettings = LogManagerSettings()
         self.settingsById = [String: LogManagerSettings]()
         self.modules = [LoggableModule.Type]()
         self.queue = DispatchQueue(label: "com.gigigo.log", qos: .utility)
+        self.queue.setSpecific(key: self.queueKey, value: 1)
+    }
+
+    /// Runs `work` on the serial `queue`, executing it directly when the caller
+    /// is already on the queue. Without this, a log `handler` or a custom
+    /// `LoggableModule.Identifier` that reaches back into a synchronized accessor
+    /// would re-enter the non-reentrant queue and deadlock.
+    private func sync<T>(_ work: () throws -> T) rethrows -> T {
+        if DispatchQueue.getSpecific(key: self.queueKey) != nil {
+            return try work()
+        }
+        return try self.queue.sync(execute: work)
     }
 
     // MARK: - Default log settings
 
+    /// A snapshot of the default settings. Read-only: mutate individual fields
+    /// through the `logLevel`/`appName`/`logStyle` setters, which are atomic and
+    /// independent. A whole-value setter would turn `defaultSettings.field = x`
+    /// into a get-copy-mutate-set that could clobber a concurrent field write.
     public var defaultSettings: LogManagerSettings {
-        get {
-            return self.queue.sync { self._defaultSettings }
-        }
-        set {
-            self.queue.sync { self._defaultSettings = newValue }
-        }
+        return self.sync { self._defaultSettings }
     }
 
     public var logLevel: LogLevel {
         get {
-            return self.queue.sync { self._defaultSettings.logLevel }
+            return self.sync { self._defaultSettings.logLevel }
         }
         set {
-            self.queue.sync { self._defaultSettings.logLevel = newValue }
+            self.sync { self._defaultSettings.logLevel = newValue }
         }
     }
 
     public var appName: String? {
         get {
-            return self.queue.sync { self._defaultSettings.moduleName }
+            return self.sync { self._defaultSettings.moduleName }
         }
         set {
-            self.queue.sync { self._defaultSettings.moduleName = newValue }
+            self.sync { self._defaultSettings.moduleName = newValue }
         }
     }
 
     public var logStyle: LogStyle {
         get {
-            return self.queue.sync { self._defaultSettings.logStyle }
+            return self.sync { self._defaultSettings.logStyle }
         }
         set {
-            self.queue.sync { self._defaultSettings.logStyle = newValue }
+            self.sync { self._defaultSettings.logStyle = newValue }
         }
     }
 
     // MARK: - Per-module settings
 
     public func setLogValues(logLevel: LogLevel = .none, logStyle: LogStyle = .none, forModule module: LoggableModule.Type) throws {
-        try self.queue.sync {
+        try self.sync {
             try self.setLogValuesNonSynchronized(logLevel: logLevel, logStyle: logStyle, forModule: module)
         }
     }
     
     public func setLogLevel(_ logLevel: LogLevel = .none, forModule module: LoggableModule.Type) throws {
-        try self.queue.sync {
+        try self.sync {
             guard let settings = self.settingsForModuleNonSynchronized(module) else {
                 try self.setLogValuesNonSynchronized(logLevel: logLevel, forModule: module)
                 return
@@ -142,13 +155,13 @@ public class LogManager: @unchecked Sendable {
     }
     
     public func logLevel(forModule module: LoggableModule.Type) -> LogLevel? {
-        return self.queue.sync {
+        return self.sync {
             return self.settingsForModuleNonSynchronized(module)?.logLevel
         }
     }
     
     public func setLogStyle(_ logStyle: LogStyle = .none, forModule module: LoggableModule.Type) throws {
-        try self.queue.sync {
+        try self.sync {
             guard let settings = self.settingsForModuleNonSynchronized(module) else {
                 try self.setLogValuesNonSynchronized(logStyle: logStyle, forModule: module)
                 return
@@ -158,115 +171,110 @@ public class LogManager: @unchecked Sendable {
     }
     
     public func logStyle(forModule module: LoggableModule.Type) -> LogStyle? {
-        return self.queue.sync {
+        return self.sync {
             return self.settingsForModuleNonSynchronized(module)?.logStyle
         }
     }
     
     public func settingsForModule(_ module: LoggableModule.Type) -> LogManagerSettings? {
-        return self.queue.sync {
+        return self.sync {
             return self.settingsForModuleNonSynchronized(module)
         }
     }
     
     public func removeSettingsForModule(_ module: LoggableModule.Type) {
-        self.queue.sync {
+        self.sync {
             self.removeSettingsNonSynchronized(module)
         }
     }
     
     public var currentModules: [LoggableModule.Type] {
-        return self.queue.sync {
+        return self.sync {
             return self.modules.map(\.self)
         }
     }
     
     public func addSettings(_ settings: LogManagerSettings, forModule module: LoggableModule.Type) throws {
-        try self.queue.sync {
+        try self.sync {
             try self.addSettignsNonSynchonized(settings, forModule: module)
         }
     }
     
     // MARK: - Logging
 
-    // The formatted line is built (and printed) inside `queue.sync`, but the
-    // optional `handler` is invoked OUTSIDE the lock. A handler may call back
-    // into the synchronized accessors (e.g. set `logLevel` to stop logging after
-    // capturing a line); doing so while the non-reentrant serial queue is still
-    // held would deadlock.
+    // Building the line, printing it, and invoking the optional `handler` all run
+    // inside `sync`, so handlers stay serialized with each other and with
+    // configuration changes. `sync` is reentrancy-tolerant, so a handler (or a
+    // custom `module.Identifier`) may safely read or set the synchronized
+    // accessors without dead-locking on the serial queue.
 
     public func log(_ module: LoggableModule.Type?, message: String, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
-        let logMessage: String? = self.queue.sync {
+        self.sync {
             let settings = self.getSettingsForModuleNonSynchronized(module)
-            guard settings.logLevel != .none else { return nil }
+            guard settings.logLevel != .none else { return }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
             let debugMessage = "[\(moduleName)]::" + message
             print(debugMessage)
-            return debugMessage
+            handler?(debugMessage)
         }
-        if let logMessage { handler?(logMessage) }
     }
 
     public func logInfo(_ module: LoggableModule.Type?, message: String, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
-        let logMessage: String? = self.queue.sync {
+        self.sync {
             let settings = self.getSettingsForModuleNonSynchronized(module)
-            guard settings.logLevel >= .info else { return nil }
+            guard settings.logLevel >= .info else { return }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
             let className = filename.lastPathComponent.components(separatedBy: ".").first ?? filename.lastPathComponent
             let emoji = (settings.logStyle == .funny) ? " ⓘ" : ""
             let caller = "[Info\(emoji)] \(className)(\(line)) - \(funcname): "
             let debugMessage = "[\(moduleName)]::\(caller)::" + message
             print(debugMessage)
-            return debugMessage
+            handler?(debugMessage)
         }
-        if let logMessage { handler?(logMessage) }
     }
 
     public func logDebug(_ module: LoggableModule.Type?, message: String, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
-        let logMessage: String? = self.queue.sync {
+        self.sync {
             let settings = self.getSettingsForModuleNonSynchronized(module)
-            guard settings.logLevel >= .debug else { return nil }
+            guard settings.logLevel >= .debug else { return }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
             let className = filename.lastPathComponent.components(separatedBy: ".").first ?? filename.lastPathComponent
             let emoji = (settings.logStyle == .funny) ? " 🐛" : ""
             let caller = "[Debug\(emoji)] \(className)(\(line)) - \(funcname): "
             let debugMessage = "[\(moduleName)]::\(caller)::" + message
             print(debugMessage)
-            return debugMessage
+            handler?(debugMessage)
         }
-        if let logMessage { handler?(logMessage) }
     }
 
     public func logError(_ module: LoggableModule.Type?, error: Error?, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
-        let logMessage: String? = self.queue.sync {
+        self.sync {
             let settings = self.getSettingsForModuleNonSynchronized(module)
             guard settings.logLevel >= .error,
                 let err = error
-                else { return nil }
+                else { return }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
             let className = filename.lastPathComponent.components(separatedBy: ".").first ?? filename.lastPathComponent
             let emoji = (settings.logStyle == .funny) ? " 🔥" : ""
             let caller = "[Error\(emoji)] \(className)(\(line)) - \(funcname): \(err.localizedDescription)"
             let debugMessage = "[\(moduleName)]::\(caller)"
             print(debugMessage)
-            return debugMessage
+            handler?(debugMessage)
         }
-        if let logMessage { handler?(logMessage) }
     }
 
     public func logWarn(_ module: LoggableModule.Type?, message: String, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
-        let logMessage: String? = self.queue.sync {
+        self.sync {
             let settings = self.getSettingsForModuleNonSynchronized(module)
-            guard settings.logLevel >= .error else { return nil }
+            guard settings.logLevel >= .error else { return }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
             let className = filename.lastPathComponent.components(separatedBy: ".").first ?? filename.lastPathComponent
             let emoji = (settings.logStyle == .funny) ? " 🔥" : ""
             let caller = "[Warn\(emoji)] \(className)(\(line)) - \(funcname): "
             let debugMessage = "[\(moduleName)]::\(caller)::" + message
             print(debugMessage)
-            return debugMessage
+            handler?(debugMessage)
         }
-        if let logMessage { handler?(logMessage) }
     }
     
     // MARK: - Private helpers

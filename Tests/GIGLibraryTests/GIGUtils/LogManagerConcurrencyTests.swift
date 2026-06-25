@@ -105,10 +105,10 @@ struct LogManagerConcurrencyTests {
 
         manager.logLevel = .debug
 
-        // The handler runs as part of the log call. Now that the accessors are
-        // synchronized, mutating one from the handler re-enters the manager's
-        // serial queue — which would deadlock if the handler were invoked while
-        // the queue was still held. Reaching the assertion proves it is not.
+        // The handler runs inside the log call, while the serial queue is held.
+        // Mutating a synchronized accessor from it re-enters the queue; the
+        // reentrancy-tolerant `sync` must run that mutation directly instead of
+        // dead-locking. Reaching the assertion proves it does.
         var handlerRan = false
         gigLogDebug("reentrancy probe", handler: { _ in
             manager.logLevel = .error
@@ -118,5 +118,35 @@ struct LogManagerConcurrencyTests {
         })
 
         #expect(handlerRan)
+    }
+
+    @Test("Given a module identifier that reads a synchronized accessor, when used in a log call, then it does not deadlock")
+    func moduleIdentifierReadingAccessorDoesNotDeadlock() {
+        let manager = LogManager.shared
+
+        let originalLevel = manager.logLevel
+        defer { manager.logLevel = originalLevel }
+
+        manager.logLevel = .debug
+
+        // logDebug evaluates `module.Identifier` while holding the serial queue,
+        // and that identifier reads `logLevel` (a synchronized accessor). The
+        // reentrancy-tolerant `sync` must run the read directly rather than
+        // dead-lock. The handler confirms the log call ran to completion.
+        var handlerRan = false
+        gigLogDebug("identifier reentrancy probe", module: ReentrantIdentifierModule.self, handler: { _ in
+            handlerRan = true
+        })
+
+        #expect(handlerRan)
+    }
+}
+
+/// A module whose identifier reaches back into a synchronized `LogManager`
+/// accessor, used to exercise reentrant access from inside the log queue.
+private enum ReentrantIdentifierModule: LoggableModule {
+    static var Identifier: String {
+        _ = LogManager.shared.logLevel
+        return "ReentrantIdentifierModule"
     }
 }
