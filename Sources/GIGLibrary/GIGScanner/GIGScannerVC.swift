@@ -20,13 +20,15 @@ public class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOu
 	var captureSession: AVCaptureSession?
 	var previewLayer: AVCaptureVideoPreviewLayer?
 	var codeFrameView: UIView?
-	// swiftlint:disable:next implicitly_unwrapped_optional
-	var captureDevice: AVCaptureDevice!
+	var captureDevice: AVCaptureDevice?
 	
 	override public func viewDidLoad() {
 		super.viewDidLoad()
-		self.captureDevice = AVCaptureDevice.default(for: AVMediaType.video)
-		
+		guard let captureDevice = AVCaptureDevice.default(for: AVMediaType.video) else {
+			LogWarn("No video capture device available")
+			return
+		}
+
 		do {
 			let input = try AVCaptureDeviceInput(device: captureDevice)
 			self.captureSession = AVCaptureSession()
@@ -50,7 +52,8 @@ public class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOu
 			]
 			
 			self.addPreviewLayer()
-			
+			self.captureDevice = captureDevice
+
 		} catch {
 			LogWarn("Error initialize camera")
 			return
@@ -68,28 +71,29 @@ public class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOu
 	}
 	
 	public func enableTorch(_ enable: Bool) {
-		
-		try? self.captureDevice.lockForConfiguration()
-		
-		if self.captureDevice.hasTorch {
-			
-			if enable {
-				self.captureDevice.torchMode = .on
-			} else {
-				self.captureDevice.torchMode = .off
+		guard let captureDevice = self.captureDevice else { return }
+
+		do {
+			try captureDevice.lockForConfiguration()
+			defer { captureDevice.unlockForConfiguration() }
+			if captureDevice.hasTorch {
+				captureDevice.torchMode = enable ? .on : .off
 			}
+		} catch let error as NSError {
+			LogError(error)
 		}
-		self.captureDevice.unlockForConfiguration()
 	}
 	
 	public func focusCamera(_ focusPoint: CGPoint) {
-		
+		guard let captureDevice = self.captureDevice else { return }
+
 		do {
-			try self.captureDevice.lockForConfiguration()
-			self.captureDevice.focusPointOfInterest = focusPoint
-			self.captureDevice.focusMode = AVCaptureDevice.FocusMode.continuousAutoFocus
-			self.captureDevice.exposurePointOfInterest = focusPoint
-			self.captureDevice.exposureMode = AVCaptureDevice.ExposureMode.continuousAutoExposure
+			try captureDevice.lockForConfiguration()
+			defer { captureDevice.unlockForConfiguration() }
+			captureDevice.focusPointOfInterest = focusPoint
+			captureDevice.focusMode = AVCaptureDevice.FocusMode.continuousAutoFocus
+			captureDevice.exposurePointOfInterest = focusPoint
+			captureDevice.exposureMode = AVCaptureDevice.ExposureMode.continuousAutoExposure
 		} catch let error as NSError {
 			LogError(error)
 		}
