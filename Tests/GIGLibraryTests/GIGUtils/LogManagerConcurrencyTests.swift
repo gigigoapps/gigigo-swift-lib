@@ -149,30 +149,32 @@ struct LogManagerConcurrencyTests {
         #expect(handlerRan)
     }
 
-    @Test("Given the value set into or read from defaultSettings, when a caller mutates it, then the manager keeps its own copy")
-    func defaultSettingsExchangesCopies() {
+    @Test("Given the value-typed defaultSettings, when a field is mutated through it, then the change is applied via the synchronized setter")
+    func defaultSettingsMemberMutationTakesEffect() {
         let manager = LogManager.shared
 
         let originalLevel = manager.logLevel
         let originalStyle = manager.logStyle
+        let originalName = manager.appName
         defer {
             manager.logLevel = originalLevel
             manager.logStyle = originalStyle
+            manager.appName = originalName
         }
 
-        // Set path: mutating the object after assigning it must not leak into the
-        // manager (the setter stores a copy).
-        let incoming = LogManagerSettings(logLevel: .error, logStyle: .none)
-        manager.defaultSettings = incoming
-        incoming.logLevel = .debug
-        #expect(manager.logLevel == .error)
+        // Member mutation through the value-typed property is a get-modify-set
+        // that routes through the synchronized setter, so it takes effect (this
+        // is the public `LogManager.shared.defaultSettings.logLevel = .debug` API).
+        manager.defaultSettings.logLevel = .debug
+        #expect(manager.logLevel == .debug)
+        #expect(manager.defaultSettings.logLevel == .debug)
 
-        // Get path: mutating the returned object must not reach the manager's
-        // internal storage (the getter returns a copy), so it cannot race the
-        // synchronized log path.
-        let outgoing = manager.defaultSettings
-        outgoing.logLevel = .debug
+        // Whole-value assignment replaces every field. `appName` is restored in
+        // the defer above because this also rewrites `moduleName`.
+        manager.defaultSettings = LogManagerSettings(moduleName: "ProbeApp", logLevel: .error, logStyle: .funny)
         #expect(manager.logLevel == .error)
+        #expect(manager.appName == "ProbeApp")
+        #expect(manager.logStyle == .funny)
     }
 }
 

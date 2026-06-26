@@ -47,7 +47,7 @@ public extension LoggableModule {
     }
 }
 
-public class LogManagerSettings {
+public struct LogManagerSettings: Sendable {
     public var logLevel: LogLevel
     public var logStyle: LogStyle
     public var moduleName: String?
@@ -65,9 +65,11 @@ public class LogManagerSettings {
 /// wrapper around `queue.sync`: when the caller already runs on `queue` (a log
 /// `handler`, or a custom `LoggableModule.Identifier` that reaches back into an
 /// accessor) the work runs directly instead of dead-locking on the non-reentrant
-/// serial queue. Every read and write the library performs on the settings is
-/// serialized on `queue`; that isolation — which the compiler cannot verify on
-/// its own — is what justifies the `@unchecked Sendable` conformance.
+/// serial queue. `LogManagerSettings` is a value type, so the accessors exchange
+/// copies and never share the internal instance; every read and write the
+/// library performs on it is serialized on `queue`. That isolation — which the
+/// compiler cannot verify on its own — is what justifies the `@unchecked
+/// Sendable` conformance.
 public class LogManager: @unchecked Sendable {
     public static let shared = LogManager()
 
@@ -98,19 +100,19 @@ public class LogManager: @unchecked Sendable {
 
     // MARK: - Default log settings
 
-    /// The default settings. The getter returns an independent copy and the
-    /// setter stores one, so the manager never shares its internal instance:
-    /// a caller cannot reach it to mutate `logLevel`/`logStyle`/`moduleName`
-    /// off-queue and race the log path. Mutating a value obtained from this
-    /// getter therefore has no effect on the manager — use the `logLevel`,
-    /// `appName` and `logStyle` setters for live per-field changes.
+    /// The default settings. As `LogManagerSettings` is a value type, the getter
+    /// hands out a copy and the setter stores one, so the internal instance is
+    /// never aliased. `defaultSettings.logLevel = .debug` works as a synchronized
+    /// get-modify-set through this property. For a single field under concurrency
+    /// prefer the atomic `logLevel`/`appName`/`logStyle` setters: a whole-value
+    /// get-modify-set spans two `sync` regions, so racing field writes through
+    /// `defaultSettings` could lose one of the updates (never a memory race).
     public var defaultSettings: LogManagerSettings {
         get {
-            return self.sync { self.copy(of: self._defaultSettings) }
+            return self.sync { self._defaultSettings }
         }
         set {
-            let snapshot = self.copy(of: newValue)
-            self.sync { self._defaultSettings = snapshot }
+            self.sync { self._defaultSettings = newValue }
         }
     }
 
@@ -284,16 +286,6 @@ public class LogManager: @unchecked Sendable {
     
     // MARK: - Private helpers
 
-    /// An independent copy of `settings`, so the manager's internal storage is
-    /// never aliased by a value handed to or returned from `defaultSettings`.
-    private func copy(of settings: LogManagerSettings) -> LogManagerSettings {
-        return LogManagerSettings(
-            moduleName: settings.moduleName,
-            logLevel: settings.logLevel,
-            logStyle: settings.logStyle
-        )
-    }
-
     private func getSettingsForModuleNonSynchronized(_ module: LoggableModule.Type?) -> LogManagerSettings {
         if let module, let moduleSettings = self.settingsForModuleNonSynchronized(module) {
             return moduleSettings
@@ -320,7 +312,7 @@ public class LogManager: @unchecked Sendable {
     }
     
     private func setLogValuesNonSynchronized(logLevel: LogLevel = .none, logStyle: LogStyle = .none, forModule module: LoggableModule.Type) throws {
-        guard let settings = self.settingsForModuleNonSynchronized(module) else {
+        guard var settings = self.settingsForModuleNonSynchronized(module) else {
             let settings = LogManagerSettings(logLevel: logLevel, logStyle: logStyle)
             try self.addSettignsNonSynchonized(settings, forModule: module)
             return
