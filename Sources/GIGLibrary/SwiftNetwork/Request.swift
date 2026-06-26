@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import os
 
 public enum StandardType {
     case gigigo
@@ -52,8 +53,14 @@ extension URLError.Code {
     static var cannotEncodeContentData: URLError.Code { .cannotParseResponse }
 }
 
+/// `@unchecked Sendable` is sound by design under a single invariant: a `Request` is fully
+/// configured before it is fetched and its configuration is never mutated across a concurrency
+/// boundary. The only state mutated *while a fetch is in flight* is the cancellation handle, and
+/// that handle is guarded by `inFlight` (an `OSAllocatedUnfairLock`). `cancel()` may therefore be
+/// called safely from any thread/actor (e.g. `ImageDownloader` on the `MainActor`) concurrently
+/// with the `@concurrent` fetch body that runs on a background executor.
 public class Request: Selfie, @unchecked Sendable {
-	
+
     public var method: HTTPMethod
     public var baseURL: String
     public var endpoint: String
@@ -71,8 +78,19 @@ public class Request: Selfie, @unchecked Sendable {
     private var logInfo: RequestLogInfo?
     private var networkLogManager: NetworkLogManaging
 	
-	private var request: URLRequest?
-    private var cancelInFlight: (() -> Void)?
+    /// Lock-protected cancellation state for the in-flight network operation. Replaces the former
+    /// unsynchronized `cancelInFlight` closure (read/written from the background fetch executor
+    /// while `cancel()` could run from another thread — a genuine data race `@unchecked Sendable`
+    /// hid). `internal` rather than `private` only so the cancellation machinery can live in
+    /// `Request+Cancellation.swift`, which is where the generation scheme is documented.
+    struct InFlightCancellation {
+        var generation = 0
+        var cancel: (@Sendable () -> Void)?
+        var cancelRequestedGeneration: Int?
+    }
+
+    let inFlight = OSAllocatedUnfairLock(initialState: InFlightCancellation())
+
     private let reachability: ReachabilityInput
     private let sessionConfiguration: URLSessionConfiguration?
     private let session: URLSession?
@@ -215,15 +233,15 @@ public class Request: Selfie, @unchecked Sendable {
         do {
             try self.preChecks()
             let request = try self.buildRequest()
-            let session = try self.prepareSession(for: request, applyCache: true)
+            let (session, generation) = try self.prepareSession(for: request, applyCache: true)
             defer {
                 session.finishTasksAndInvalidate()
             }
 
             let operation = Task { try await session.data(for: request) }
-            self.cancelInFlight = { operation.cancel() }
+            self.installCanceller({ operation.cancel() }, generation: generation)
             defer {
-                self.cancelInFlight = nil
+                self.clearCanceller(generation: generation)
             }
 
             let (data, urlResponse) = try await withTaskCancellationHandler {
@@ -301,15 +319,15 @@ public class Request: Selfie, @unchecked Sendable {
         do {
             try self.preChecks()
             let request = try self.buildRequest()
-            let session = try self.prepareSession(for: request, applyCache: false)
+            let (session, generation) = try self.prepareSession(for: request, applyCache: false)
             defer {
                 session.finishTasksAndInvalidate()
             }
 
             let operation = Task { try await session.download(for: request) }
-            self.cancelInFlight = { operation.cancel() }
+            self.installCanceller({ operation.cancel() }, generation: generation)
             defer {
-                self.cancelInFlight = nil
+                self.clearCanceller(generation: generation)
             }
 
             let (location, urlResponse) = try await withTaskCancellationHandler {
@@ -344,15 +362,15 @@ public class Request: Selfie, @unchecked Sendable {
         do {
             try self.preChecks()
             let (request, bodyData) = try self.buildUploadRequest(files: files, params: params)
-            let session = try self.prepareSession(for: request, bodyForLog: bodyData, applyCache: false)
+            let (session, generation) = try self.prepareSession(for: request, bodyForLog: bodyData, applyCache: false)
             defer {
                 session.finishTasksAndInvalidate()
             }
 
             let operation = Task { try await session.upload(for: request, from: bodyData) }
-            self.cancelInFlight = { operation.cancel() }
+            self.installCanceller({ operation.cancel() }, generation: generation)
             defer {
-                self.cancelInFlight = nil
+                self.clearCanceller(generation: generation)
             }
 
             let (data, urlResponse) = try await withTaskCancellationHandler {
@@ -379,12 +397,6 @@ public class Request: Selfie, @unchecked Sendable {
         }
     }
 
-	public func cancel() {
-        self.cancelInFlight?()
-        self.cancelInFlight = nil
-	}
-	
-	
 	// MARK: - Private Helpers
     
     private func controlCache(config: URLSessionConfiguration) {
@@ -463,21 +475,27 @@ public class Request: Selfie, @unchecked Sendable {
         for request: URLRequest,
         bodyForLog: Data? = nil,
         applyCache: Bool
-    ) throws -> URLSession {
+    ) throws -> (session: URLSession, generation: Int) {
         var requestForLog = request
         if let bodyForLog {
             requestForLog.httpBody = bodyForLog
         }
-        self.request = requestForLog
-        self.logRequest()
-        self.cancel()
+        self.logRequest(requestForLog)
+        // Opens this attempt's cancellation scope (and cancels any prior in-flight attempt on this
+        // instance) at the same point the legacy synchronous `cancel()` ran, before the session is
+        // configured — so a superseding `fetch()` tears the previous one down without a timing shift.
+        let generation = self.beginCancellationScope()
 
         let session = self.configuredSession(applyCache: applyCache)
         if Task.isCancelled {
+            // The caller installs `defer { session.finishTasksAndInvalidate() }` only on the
+            // returned value, so invalidate here before throwing or this session (and the delegate
+            // it retains) would leak until ARC reclaims it.
+            session.finishTasksAndInvalidate()
             self.logRequestError(message: "Request cancelled before execution.")
             throw RequestBuildError.cancelledBeforeExecution
         }
-        return session
+        return (session, generation)
     }
 
     private func buildUploadRequest(
@@ -594,15 +612,15 @@ public class Request: Selfie, @unchecked Sendable {
         return url?.string
     }
 	
-	fileprivate func logRequest() {
+	fileprivate func logRequest(_ request: URLRequest) {
         guard self.verbose else { return }
-        
+
         if self.logInfo == nil {
             LogManager.shared.logLevel = .debug
             LogManager.shared.appName = "GIGLibrary"
         }
-        
-        let log = RequestLogFormatter.buildRequestLog(request: self.request)
+
+        let log = RequestLogFormatter.buildRequestLog(request: request)
         self.networkLogManager.log(log, info: self.logInfo)
 	}
     
