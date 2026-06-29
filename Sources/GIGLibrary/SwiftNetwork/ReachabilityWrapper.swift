@@ -7,8 +7,9 @@
 //
 
 import Foundation
+import os
 
-public enum NetworkStatus {
+public enum NetworkStatus: Sendable {
     case notReachable
     case reachableViaWiFi
     case reachableViaMobileData
@@ -23,89 +24,165 @@ public protocol ReachabilityInput {
     func isReachableViaWiFi() -> Bool
 }
 
+/// Global reachability monitor.
+///
+/// `@unchecked Sendable` is justified by design and holds for *any* instance,
+/// not just `shared`: every piece of *mutable* state (`delegate`,
+/// `currentStatus`, `isRunning`) lives inside `state`, a per-instance
+/// `OSAllocatedUnfairLock` (the same primitive that guards `Request.inFlight`),
+/// and is only ever read or written while holding that lock. The `delegate`
+/// accessors use `withLockUnchecked` because `ReachabilityWrapperDelegate` is
+/// not `Sendable`; the lock provides the exclusion the compiler cannot verify on
+/// its own. `reachability` is an immutable `let` read lock-free; the vendored
+/// `Reachability.connection` getter is not synchronized (it reads a mutable
+/// `allowsCellularConnection` alongside a thread-safe `SCNetworkReachabilityGetFlags`
+/// query), so those reads are racy-but-benign — behaviour unchanged from before
+/// this lock was introduced, and out of scope here since it is vendored code.
 public class ReachabilityWrapper: ReachabilityInput, @unchecked Sendable {
     // MARK: Singleton
     public static let shared = ReachabilityWrapper()
-    
+
     // MARK: Public properties
-    public weak var delegate: ReachabilityWrapperDelegate?
-    
+
+    /// The delegate notified when the network status changes. Stored behind
+    /// `state`, so reads and writes are serialized across threads.
+    public var delegate: ReachabilityWrapperDelegate? {
+        get { state.withLockUnchecked { $0.delegate } }
+        set { state.withLockUnchecked { $0.delegate = newValue } }
+    }
+
     // MARK: Private properties
+
+    /// All mutable state, guarded by a single lock. `delegate` is `weak` so the
+    /// wrapper never keeps its observer alive.
+    private struct State {
+        weak var delegate: ReachabilityWrapperDelegate?
+        var currentStatus: NetworkStatus = .notReachable
+        var isRunning = false
+    }
+
+    private let state = OSAllocatedUnfairLock(uncheckedState: State())
     private let reachability: Reachability?
-    private var currentStatus = NetworkStatus.notReachable
-    
+
     // MARK: - Life cycle
     private init() {
         self.reachability = Reachability()
         self.startNotifier()
     }
-    
-    deinit {
-       self.stopNotifier()
+
+    /// Dependency-injection seam (internal): builds an instance that does **not**
+    /// start the live notifier, so the lock-backed status/delegate/debounce logic
+    /// can be exercised in isolation. The shared singleton always uses `init()`.
+    init(reachability: Reachability?) {
+        self.reachability = reachability
     }
-    
+
+    deinit {
+        // Acquiring `state` here is safe: an object being deallocated has no
+        // remaining references, so no other thread can contend for the lock.
+        self.stopNotifier()
+    }
+
     // MARK: - Reachability methods
-    public func startNotifier() {
-        // Listen to reachability changes
+
+    public func isReachable() -> Bool {
+        return self.reachability?.connection != Reachability.Connection.none
+    }
+
+    public func isReachableViaWiFi() -> Bool {
+        return self.reachability?.connection == .wifi
+    }
+
+    // MARK: - Private methods
+
+    /// Idempotent: a second call is a no-op so the wrapper never registers a
+    /// duplicate `NotificationCenter` observer (which would double-fire
+    /// `reachabilityChanged`). Lifecycle is owned by `init`/`deinit`.
+    private func startNotifier() {
+        let snapshot = self.currentNetworkStatus()
+        let shouldStart = state.withLockUnchecked { state -> Bool in
+            guard !state.isRunning else { return false }
+            state.isRunning = true
+            state.currentStatus = snapshot
+            return true
+        }
+        guard shouldStart else { return }
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(reachabilityChanged(_:)),
             name: .reachabilityChanged,
             object: reachability
         )
-        
-        self.currentStatus = self.networkStatus()
-        ((try? self.reachability?.startNotifier()) as ()??)
+        _ = try? self.reachability?.startNotifier()
     }
-    
-    public func stopNotifier() {
+
+    /// Idempotent counterpart to `startNotifier`.
+    private func stopNotifier() {
+        let shouldStop = state.withLockUnchecked { state -> Bool in
+            guard state.isRunning else { return false }
+            state.isRunning = false
+            return true
+        }
+        guard shouldStop else { return }
+
         NotificationCenter.default.removeObserver(
             self,
             name: .reachabilityChanged,
             object: reachability
         )
-        
         self.reachability?.stopNotifier()
     }
-    
-    public func isReachable() -> Bool {
-        return self.reachability?.connection != Reachability.Connection.none
+
+    private func currentNetworkStatus() -> NetworkStatus {
+        return Self.networkStatus(for: self.reachability?.connection)
     }
-    
-    public func isReachableViaWiFi() -> Bool {
-        return self.reachability?.connection == .wifi
-    }
-        
-    // MARK: - Private methods
-    private func networkStatus() -> NetworkStatus {
-        if let connection = self.reachability?.connection {
-            switch connection {
-            case .none:
-                return .notReachable
-            case .cellular:
-                return .reachableViaMobileData
-            case .wifi:
-                return .reachableViaWiFi
-            }
+
+    /// Pure mapping from a `Reachability.Connection` to `NetworkStatus`.
+    /// Extracted as a static, side-effect-free function so it can be unit tested
+    /// without a live `SCNetworkReachability` instance.
+    static func networkStatus(for connection: Reachability.Connection?) -> NetworkStatus {
+        switch connection {
+        case .cellular:
+            return .reachableViaMobileData
+        case .wifi:
+            return .reachableViaWiFi
+        case .some(.none), nil:
+            return .notReachable
         }
-        return .notReachable
     }
-    
+
+    /// Debounce decision: the status to broadcast when moving to `new`, or `nil`
+    /// when it equals `current` (no observable change, so the delegate is not
+    /// notified). Pure, so the debounce contract is unit testable on its own.
+    static func statusChange(current: NetworkStatus, new: NetworkStatus) -> NetworkStatus? {
+        return current == new ? nil : new
+    }
+
+    /// Applies `newStatus` under the lock and returns the delegate to notify, or
+    /// `nil` when the status is unchanged (debounced). The debounce read, the
+    /// `currentStatus` update and the `delegate` read happen atomically; the
+    /// caller invokes the delegate *outside* the lock. Split from the
+    /// notification plumbing so the lock-backed contract is unit testable without
+    /// a live `Reachability`. `withLockUnchecked` because
+    /// `ReachabilityWrapperDelegate` is not `Sendable`.
+    func apply(_ newStatus: NetworkStatus) -> ReachabilityWrapperDelegate? {
+        return state.withLockUnchecked { state -> ReachabilityWrapperDelegate? in
+            guard let broadcast = Self.statusChange(current: state.currentStatus, new: newStatus) else { return nil }
+            state.currentStatus = broadcast
+            return state.delegate
+        }
+    }
+
     // MARK: - Reachability Change
     @objc
     func reachabilityChanged(_ notification: NSNotification) {
         guard let reachability = notification.object as? Reachability else { return }
-        if self.networkStatus() != self.currentStatus {
-            self.currentStatus = self.networkStatus()
-            if reachability.connection != Reachability.Connection.none {
-                if reachability.connection == .wifi {
-                    self.delegate?.reachabilityChanged(with: .reachableViaWiFi)
-                } else {
-                    self.delegate?.reachabilityChanged(with: .reachableViaMobileData)
-                }
-            } else {
-                self.delegate?.reachabilityChanged(with: .notReachable)
-            }
-        }
+        // `newStatus` is a snapshot of the connection at notification time. The
+        // vendored `Reachability.connection` getter is unsynchronized, so we read
+        // it once and debounce/broadcast against that single value rather than
+        // re-reading it (which could yield a different result mid-method).
+        let newStatus = Self.networkStatus(for: reachability.connection)
+        self.apply(newStatus)?.reachabilityChanged(with: newStatus)
     }
 }

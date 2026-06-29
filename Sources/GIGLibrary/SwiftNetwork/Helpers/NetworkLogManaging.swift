@@ -8,7 +8,7 @@
 
 import Foundation
 
-protocol NetworkLogManaging {
+protocol NetworkLogManaging: Sendable {
     func log(_ message: String, info: RequestLogInfo?)
 }
 
@@ -19,13 +19,14 @@ struct DefaultNetworkLogManager: NetworkLogManaging {
             return
         }
 
+        let filename = info.filename as NSString
         switch info.logLevel {
         case .debug:
-            gigLogDebug(message, module: info.module, filename: info.filename, line: info.line, funcname: info.funcname, handler: info.handler)
+            gigLogDebug(message, module: info.module, filename: filename, line: info.line, funcname: info.funcname, handler: info.handler)
         case .error:
-            gigLogError(NSError(code: 0, message: message), module: info.module, filename: info.filename, line: info.line, funcname: info.funcname, handler: info.handler)
+            gigLogError(NSError(code: 0, message: message), module: info.module, filename: filename, line: info.line, funcname: info.funcname, handler: info.handler)
         case .info:
-            gigLogInfo(message, module: info.module, filename: info.filename, line: info.line, funcname: info.funcname, handler: info.handler)
+            gigLogInfo(message, module: info.module, filename: filename, line: info.line, funcname: info.funcname, handler: info.handler)
         default:
             break
         }
