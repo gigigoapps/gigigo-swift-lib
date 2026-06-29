@@ -78,12 +78,14 @@ public class Response: Selfie, @unchecked Sendable {
             // `.success`, even when a Gigigo envelope claims `status: true`/`"OK"` (which
             // `parseJSON()` would otherwise honour). If body parsing already mapped a specific
             // error (`.apiError`, `.sessionExpired`, …) keep it; only override a still-unknown or
-            // wrongly-successful status with a synthesized HTTP error.
-            if !(200..<300).contains(self.statusCode), self.status == .unknownError || self.status == .success {
+            // wrongly-successful status with a synthesized HTTP error. Use the transport code from
+            // `response` directly — `parseError(json:)` may have overwritten `self.statusCode` with
+            // the envelope's application error code, which would lose the real HTTP status here.
+            if !(200..<300).contains(response.statusCode), self.status == .unknownError || self.status == .success {
                 let fallbackError = NSError(
                     domain: kGIGNetworkErrorDomain,
-                    code: self.statusCode,
-                    message: "HTTP error \(self.statusCode)"
+                    code: response.statusCode,
+                    message: "HTTP error \(response.statusCode)"
                 )
                 self.error = fallbackError
                 self.status = self.parseError(error: fallbackError)
@@ -112,8 +114,12 @@ public class Response: Selfie, @unchecked Sendable {
 		return json
 	}
 	
-    @MainActor
-    func image() throws -> UIImage {
+    /// Decodes the response body into a `UIImage`. `nonisolated` and scale-injected on purpose: a
+    /// `.gif` body can carry many/large frames and is network-controlled, so the (potentially heavy)
+    /// decode must run off the main actor — `ImageDownloader` reads the scale on the main actor and
+    /// then calls this from a detached task. GIFs decode as animated images; everything else as a
+    /// single frame at `scale`.
+    func image(scale: CGFloat) throws -> UIImage {
 		guard let imageData = self.body else {
 			throw ResponseError.bodyNil
 		}
@@ -128,7 +134,7 @@ public class Response: Selfie, @unchecked Sendable {
             return image
         }
 
-        guard let image = UIImage(data: imageData, scale: UIScreen.main.scale) else {
+        guard let image = UIImage(data: imageData, scale: scale) else {
             throw ResponseError.unexpectedDataType
         }
         return image

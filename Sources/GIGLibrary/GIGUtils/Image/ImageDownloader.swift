@@ -158,22 +158,27 @@ struct ImageDownloader {
     private func handleResponse(_ response: Response, view: UIImageView, request: Request) {
         switch response.status {
         case .success:
-            guard let image = try? response.image() else {
-                LogWarn("While downloading the image, the body was empty or the image type was not recognized.")
-                self.clearQueueEntry(for: view, ifCurrent: request)
-                self.finishDownload()
-                return
-            }
-            let width = view.width() * UIScreen.main.scale
-            let height = view.height() * UIScreen.main.scale
-            let targetSize = CGSize(width: width, height: height)
-            // The network download finished: release the slot now so the next one can start.
-            // Resizing is CPU work; it must not keep a download slot occupied, and a low-priority
-            // resize must never gate the concurrency counter.
+            // Read the scale and target size on the main actor (UIKit), then release the download
+            // slot and move BOTH the decode and the resize off the main actor. Decoding a
+            // network-controlled `.gif` (potentially many/large frames) on the main actor would
+            // block the UI thread; like the resize, it is CPU work that must not gate the
+            // concurrency counter or hold a download slot.
+            let scale = UIScreen.main.scale
+            let targetSize = CGSize(width: view.width() * scale, height: view.height() * scale)
             self.finishDownload()
             Task.detached(priority: .utility) {
+                guard let image = try? response.image(scale: scale) else {
+                    await MainActor.run {
+                        LogWarn("While downloading the image, the body was empty or the image type was not recognized.")
+                        self.clearQueueEntry(for: view, ifCurrent: request)
+                    }
+                    return
+                }
                 var finalImage = image
-                if let resized = image.imageProportionally(with: targetSize) {
+                // Never resize an animated image: `imageProportionally` redraws into a single
+                // graphics context, which would flatten a multi-frame GIF to one static frame and
+                // silently undo the GIF decode. Publish animated images (`images != nil`) as-is.
+                if image.images == nil, let resized = image.imageProportionally(with: targetSize) {
                     finalImage = resized
                 }
                 await MainActor.run {

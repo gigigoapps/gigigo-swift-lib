@@ -196,6 +196,26 @@ struct ImageDownloaderTests {
         #expect(networkHits.value == 1)
     }
 
+    @Test("Given an animated GIF response, when downloaded, then the cached image stays animated (resize must not flatten it)")
+    func gifDownloadStaysAnimated() async {
+        ImageDownloader.resetForTesting()
+        let urlString = "https://example.com/anim.gif"
+        // Minimal 1x1 GIF89a — decodes to an animated UIImage (`images != nil`). The resize step
+        // would flatten it to a single static frame if it weren't skipped for animated images.
+        let gifData = Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7") ?? Data()
+        ImageDownloader.fetchProvider = { _ in
+            makeImageResponse(body: gifData, url: URL(string: urlString) ?? URL(fileURLWithPath: "/anim.gif"))
+        }
+
+        let view = makeImageView()
+        ImageDownloader.shared.download(url: urlString, for: view, placeholder: nil)
+
+        let cached = await waitUntil { ImageDownloader.images[urlString] != nil }
+        #expect(cached)
+        #expect(ImageDownloader.images[urlString]?.images != nil)
+        #expect(ImageDownloader.activeDownloads == 0)
+    }
+
     // MARK: - Cache hit
 
     @Test("Given a cached URL, when requested, then no download starts and the cached image is assigned")

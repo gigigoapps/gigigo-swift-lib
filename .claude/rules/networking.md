@@ -99,7 +99,7 @@ FileUploadData(data: Data, mimeType: String, filename: String, name: String)
 
 Helper methods:
 - `json() throws -> JSON`
-- `image() throws -> UIImage` — **requires `@MainActor`**
+- `image(scale:) throws -> UIImage` — `nonisolated`; decode runs wherever called (callers run it off-main for network-controlled GIFs)
 
 Internal factory methods: `noInternet()`, `invalidURL()`, `cancelled()`, `cannotEncodeContentData()`
 
@@ -156,8 +156,8 @@ In tests: inject `NetworkLogManagerSpy` via the designated `init` to capture log
 
 - `fetch()` **never throws** — always check `Response.status` before using `Response.data`
 - `fetchDecodable` and `fetchVoid` **do** throw — wrap in `do/catch`
-- `Response.image()` requires `@MainActor` — call inside `await MainActor.run { }` if not already on main
-- `Response.image()` decodes `.gif` URLs as animated images (via `UIImage.gif(data:)`); other URLs decode as a single `UIImage`
+- `Response.image(scale:)` is `nonisolated` and takes the screen scale explicitly — decode GIFs off the main actor (read `UIScreen.main.scale` on main, then call from a background task) so a large/multi-frame network GIF can't block the UI
+- `Response.image(scale:)` decodes `.gif` URLs as animated images (via `UIImage.gif(data:)`); other URLs decode as a single `UIImage` at `scale`
 - `.gigigo` standard type marks the response as failed on `{ "status": false }` even with HTTP 200 — intentional
 - `fetch()` silently returns a `.noInternet` response if reachability check fails — no exception is raised
 - Only HTTP `200..<300` is `.success`; `300`+ map to an error status
