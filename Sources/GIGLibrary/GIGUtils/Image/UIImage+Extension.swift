@@ -169,25 +169,28 @@ extension UIImage {
         let count = CGImageSourceGetCount(source)
         var images = [CGImage]()
         var delays = [Int]()
-        // Fill arrays
+        // Fill arrays. Keep `images` and `delays` aligned: a frame that fails to decode is skipped
+        // entirely instead of appending a delay without an image. Otherwise a partially corrupt GIF
+        // desyncs the arrays and the frame loop below traps on `images[i]` out of range — a path now
+        // reachable from untrusted network data via `Response.image()`.
         for i in 0..<count {
             // Add image
-            if let image = CGImageSourceCreateImageAtIndex(source, i, nil) {
-                images.append(image)
-            }
+            guard let image = CGImageSourceCreateImageAtIndex(source, i, nil) else { continue }
+            images.append(image)
             // At it's delay in cs
             let delaySeconds = UIImage.delayForImageAtIndex(Int(i),
                                                             source: source)
             delays.append(Int(delaySeconds * 1000.0)) // Seconds to ms
         }
+        guard !images.isEmpty else { return nil }
         // Calculate full duration
         let duration: Int = {
             var sum = 0
-            
+
             for val: Int in delays {
                 sum += val
             }
-            
+
             return sum
         }()
         // Get frames
@@ -195,10 +198,10 @@ extension UIImage {
         var frames = [UIImage]()
         var frame: UIImage
         var frameCount: Int
-        for i in 0..<count {
-            frame = UIImage(cgImage: images[Int(i)])
-            frameCount = Int(delays[Int(i)] / gcd)
-            
+        for i in 0..<images.count {
+            frame = UIImage(cgImage: images[i])
+            frameCount = Int(delays[i] / gcd)
+
             for _ in 0..<frameCount {
                 frames.append(frame)
             }

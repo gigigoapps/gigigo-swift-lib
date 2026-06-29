@@ -96,6 +96,11 @@ extension Request {
             if CFGetTypeID(number) == CFBooleanGetTypeID() {
                 return number.boolValue ? "true" : "false"
             }
+            // A non-finite Double (NaN/±Inf) would render as "nan"/"inf" via stringValue and ship
+            // silent garbage to the backend; treat it as non-encodable (valueless item) instead.
+            if !number.doubleValue.isFinite {
+                return nil
+            }
             return number.stringValue
         default:
             return String(describing: value)
