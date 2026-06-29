@@ -30,15 +30,23 @@ public enum ResponseError: Error {
 	case unexpectedDataType
 }
 
+/// `@unchecked Sendable` is sound by design under one invariant: a `Response` is fully populated
+/// inside `init` (including the `parseJSON`/`parseError` it drives) and is never mutated afterwards.
+/// `fetch()` constructs it, returns it, and hands ownership to the caller without retaining a
+/// mutable reference — so although it crosses a concurrency boundary, only one context ever touches
+/// it at a time. Every stored property is therefore exposed as `public private(set)`: consumers read
+/// it, no one outside the type can mutate it post-init. `data` is a `JSON` (a mutable reference
+/// type); it too is built during `init` and neither shared nor mutated afterwards. Hardening `JSON`
+/// itself into a value/Sendable type is tracked separately (C048).
 public class Response: Selfie, @unchecked Sendable {
-	
-	public var status: ResponseStatus
-	public var statusCode: Int
-	public var url: URL?
-	public var headers: [AnyHashable: Any]?
-	public var body: Data?
-	public var data: JSON?
-	public var error: NSError?
+
+	public private(set) var status: ResponseStatus
+	public private(set) var statusCode: Int
+	public private(set) var url: URL?
+	public private(set) var headers: [AnyHashable: Any]?
+	public private(set) var body: Data?
+	public private(set) var data: JSON?
+	public private(set) var error: NSError?
 
 	private var networkLogManager: NetworkLogManaging
     private var standardType: StandardType = .gigigo
@@ -58,15 +66,15 @@ public class Response: Selfie, @unchecked Sendable {
 			self.body = data
 			self.statusCode = response.statusCode
 			
-			if (200...300).contains(self.statusCode) {
+			if (200..<300).contains(self.statusCode) {
 				self.status = .success
 			}
-			
+
             if self.shouldParseJSON(headers: self.headers, body: self.body) {
                 self.parseJSON()
             }
 
-            if !(200...300).contains(self.statusCode), self.status == .unknownError {
+            if !(200..<300).contains(self.statusCode), self.status == .unknownError {
                 let fallbackError = NSError(
                     domain: kGIGNetworkErrorDomain,
                     code: self.statusCode,
@@ -104,7 +112,18 @@ public class Response: Selfie, @unchecked Sendable {
 		guard let imageData = self.body else {
 			throw ResponseError.bodyNil
 		}
-        guard !isGifData(), let image = UIImage(data: imageData, scale: UIScreen.main.scale) else {
+
+        // GIFs need the animated decoder: `UIImage(data:)` only yields the first frame, and the
+        // previous code rejected them outright — so a managed download (e.g. `ImageDownloader`)
+        // spent a network slot only to discard the result silently. Decode them properly here.
+        if self.isGifURL() {
+            guard let image = UIImage.gif(data: imageData) else {
+                throw ResponseError.unexpectedDataType
+            }
+            return image
+        }
+
+        guard let image = UIImage(data: imageData, scale: UIScreen.main.scale) else {
             throw ResponseError.unexpectedDataType
         }
         return image
@@ -143,11 +162,11 @@ public class Response: Selfie, @unchecked Sendable {
 
     // MARK: - Private Helpers
     
-    private func isGifData() -> Bool {
+    private func isGifURL() -> Bool {
         guard let url else {
             return false
         }
-        return url.pathExtension == "gif"
+        return url.pathExtension.caseInsensitiveCompare("gif") == .orderedSame
     }
 
     private func shouldParseJSON(headers: [AnyHashable: Any]?, body: Data?) -> Bool {
