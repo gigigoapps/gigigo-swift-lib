@@ -270,6 +270,89 @@ struct ResponseTests {
         }
     }
 
+    @Test("Given a non-2xx response carrying a Gigigo success envelope, when Response parses, then the HTTP status wins and it is not success")
+    func responseNon2xxWithSuccessEnvelopeIsNotSuccess() throws {
+        // Given a 400 whose body still claims success the Gigigo way
+        let url = try #require(URL(string: "https://example.com"))
+        let body: [String: Any] = ["status": true, "data": ["id": 1]]
+        let data = try JSONSerialization.data(withJSONObject: body, options: [])
+        let httpResponse = HTTPURLResponse.fake(
+            url: url,
+            statusCode: 400,
+            headers: ["Content-Type": "application/json"]
+        )
+
+        // When
+        let response = Response(data: data, response: httpResponse, error: nil, standardType: .gigigo)
+
+        // Then the non-2xx HTTP status is authoritative
+        #expect(response.status != .success)
+        #expect(response.statusCode == 400)
+        #expect(response.error?.domain == kGIGNetworkErrorDomain)
+    }
+
+    @Test("Given a non-2xx response with a Gigigo error envelope, when Response parses, then the specific API error is preserved")
+    func responseNon2xxWithErrorEnvelopeKeepsApiError() throws {
+        // Given a 400 carrying a Gigigo error envelope: the specific error must not be clobbered
+        let url = try #require(URL(string: "https://example.com"))
+        let body: [String: Any] = ["status": false, "error": ["code": 15001, "message": "Bad"]]
+        let data = try JSONSerialization.data(withJSONObject: body, options: [])
+        let httpResponse = HTTPURLResponse.fake(
+            url: url,
+            statusCode: 400,
+            headers: ["Content-Type": "application/json"]
+        )
+
+        // When
+        let response = Response(data: data, response: httpResponse, error: nil, standardType: .gigigo)
+
+        // Then
+        #expect(response.status == .apiError)
+        #expect(response.statusCode == 15001)
+        #expect(response.error?.code == 15001)
+    }
+
+    @Test("Given a non-2xx response carrying a Gigigo envelope with status OK string, when Response parses, then the HTTP status wins and it is not success")
+    func responseNon2xxWithOkStringEnvelopeIsNotSuccess() throws {
+        // Given a 400 whose envelope claims success via the string form ("OK", not boolean true)
+        let url = try #require(URL(string: "https://example.com"))
+        let body: [String: Any] = ["status": "OK", "data": ["id": 1]]
+        let data = try JSONSerialization.data(withJSONObject: body, options: [])
+        let httpResponse = HTTPURLResponse.fake(
+            url: url,
+            statusCode: 400,
+            headers: ["Content-Type": "application/json"]
+        )
+
+        // When
+        let response = Response(data: data, response: httpResponse, error: nil, standardType: .gigigo)
+
+        // Then
+        #expect(response.status != .success)
+        #expect(response.statusCode == 400)
+    }
+
+    @Test("Given a non-2xx basic-standard JSON response, when Response parses, then it is not success even though the body parsed")
+    func responseNon2xxBasicJsonIsNotSuccess() throws {
+        // Given a 400 with a plain JSON body parsed under the basic standard type
+        let url = try #require(URL(string: "https://example.com"))
+        let body: [String: Any] = ["message": "nope"]
+        let data = try JSONSerialization.data(withJSONObject: body, options: [])
+        let httpResponse = HTTPURLResponse.fake(
+            url: url,
+            statusCode: 400,
+            headers: ["Content-Type": "application/json"]
+        )
+
+        // When
+        let response = Response(data: data, response: httpResponse, error: nil, standardType: .basic)
+
+        // Then the HTTP error wins; the parsed body remains available behind the error status
+        #expect(response.status != .success)
+        #expect(response.statusCode == 400)
+        #expect(response.data?.toDictionary()?["message"] as? String == "nope")
+    }
+
     @Test("Given invalid image data, when image is requested, then it throws unexpectedDataType")
     func imageThrowsWhenDataIsInvalid() throws {
         // Given
