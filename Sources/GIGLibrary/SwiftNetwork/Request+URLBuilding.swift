@@ -75,13 +75,39 @@ extension Request {
     /// same name; every other value is converted explicitly (see `queryValue(for:)`) instead of
     /// via `String(describing:)`, which leaks `Optional(...)`/`[1, 2]`-style text into the URL.
     private func queryItems(name: String, value: Any) -> [URLQueryItem] {
-        if let array = value as? [Any] {
+        // `urlParams` is `[String: Any]`, so a caller can pass `Optional("x") as Any` or a nil
+        // optional. Unwrap it first: a nil optional becomes a single valueless item, and a wrapped
+        // value (incl. an optional array) is processed as if it had been passed directly.
+        guard let unwrapped = self.unwrapOptional(value) else {
+            return [URLQueryItem(name: name, value: nil)]
+        }
+        if let array = unwrapped as? [Any] {
             return array.map { URLQueryItem(name: name, value: self.queryValue(for: $0)) }
         }
-        return [URLQueryItem(name: name, value: self.queryValue(for: value))]
+        return [URLQueryItem(name: name, value: self.queryValue(for: unwrapped))]
+    }
+
+    /// Fully unwraps nested `Optional`s from an `Any`, returning `nil` if any level is `.none`.
+    private func unwrapOptional(_ value: Any) -> Any? {
+        var current = value
+        while true {
+            let mirror = Mirror(reflecting: current)
+            guard mirror.displayStyle == .optional else {
+                return current
+            }
+            guard let inner = mirror.children.first?.value else {
+                return nil
+            }
+            current = inner
+        }
     }
 
     private func queryValue(for value: Any) -> String? {
+        // Array elements (and any value) may themselves be optionals; unwrap before encoding so a
+        // nil optional drops its value instead of stringifying to "nil"/"Optional(...)".
+        guard let value = self.unwrapOptional(value) else {
+            return nil
+        }
         switch value {
         case is NSNull:
             return nil

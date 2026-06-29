@@ -839,6 +839,54 @@ struct RequestTests {
         #expect(queryItems.allSatisfy { ($0.value ?? "") != "nan" && ($0.value ?? "") != "inf" })
     }
 
+    @Test("Given optional URL param values, when fetch is called, then they are unwrapped, not stringified as Optional(...)/nil")
+    func fetchUnwrapsOptionalUrlParams() async throws {
+        // Given values that arrive as Optionals through the [String: Any] box
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.respond(path: "/optionals") { request in
+            capturedRequest = request
+        }
+
+        let some: String? = "abc"
+        let none: String? = nil
+        let someInt: Int? = 7
+        let optionalArray: [Int]? = [1, 2]
+
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/optionals",
+            urlParams: [
+                "a": some as Any,
+                "b": none as Any,
+                "c": someInt as Any,
+                "tags": optionalArray as Any
+            ]
+        )
+
+        // When
+        _ = await request.fetch()
+
+        // Then
+        let urlRequest = try #require(capturedRequest)
+        let requestURL = try #require(urlRequest.url)
+        let components = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false))
+        let queryItems = components.queryItems ?? []
+        let item = { (name: String) in queryItems.first(where: { $0.name == name }) }
+
+        #expect(item("a")?.value == "abc")
+        #expect(item("c")?.value == "7")
+        // Optional-wrapped array still expands.
+        #expect(Set(queryItems.filter { $0.name == "tags" }.compactMap { $0.value }) == ["1", "2"])
+        // nil optional → valueless item, never "nil"/"Optional(...)".
+        #expect(queryItems.contains { $0.name == "b" })
+        #expect(item("b")?.value == nil)
+        #expect(queryItems.allSatisfy { v in
+            let s = v.value ?? ""
+            return !s.contains("Optional") && s != "nil"
+        })
+    }
+
     @Test("Given a base URL without a scheme, when fetch is called, then it returns an invalid URL response and does not send the request")
     func fetchReturnsInvalidUrlForSchemelessBaseUrl() async {
         // Given

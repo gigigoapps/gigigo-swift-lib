@@ -213,7 +213,7 @@ struct ResponseTests {
 
         // When/Then
         assertThrowsResponseError(.bodyNil) {
-            _ = try response.image()
+            _ = try response.image(scale: 1)
         }
     }
 
@@ -225,7 +225,7 @@ struct ResponseTests {
 
         // When/Then
         assertThrowsResponseError(.unexpectedDataType) {
-            _ = try response.image()
+            _ = try response.image(scale: 1)
         }
     }
 
@@ -237,7 +237,7 @@ struct ResponseTests {
         let response = makeImageResponse(body: gifData, url: url)
 
         // When
-        let image = try response.image()
+        let image = try response.image(scale: 1)
 
         // Then it went through the animated GIF decoder (UIImage.gif), not the single-frame fallback
         #expect(image.images != nil)
@@ -312,6 +312,27 @@ struct ResponseTests {
         #expect(response.error?.code == 15001)
     }
 
+    @Test("Given a non-2xx Gigigo error envelope whose code does not map to a status, when Response parses, then the synthesized error uses the real HTTP code")
+    func responseNon2xxUnmappedErrorEnvelopeUsesHttpCode() throws {
+        // Given HTTP 400 with an application error code (1001) that maps to no specific status
+        let url = try #require(URL(string: "https://example.com"))
+        let body: [String: Any] = ["status": false, "error": ["code": 1001, "message": "Bad request"]]
+        let data = try JSONSerialization.data(withJSONObject: body, options: [])
+        let httpResponse = HTTPURLResponse.fake(
+            url: url,
+            statusCode: 400,
+            headers: ["Content-Type": "application/json"]
+        )
+
+        // When
+        let response = Response(data: data, response: httpResponse, error: nil, standardType: .gigigo)
+
+        // Then the transport status (400) is preserved, not the envelope code (1001)
+        #expect(response.status != .success)
+        #expect(response.statusCode == 400)
+        #expect(response.error?.code == 400)
+    }
+
     @Test("Given a non-2xx response carrying a Gigigo envelope with status OK string, when Response parses, then the HTTP status wins and it is not success")
     func responseNon2xxWithOkStringEnvelopeIsNotSuccess() throws {
         // Given a 400 whose envelope claims success via the string form ("OK", not boolean true)
@@ -361,7 +382,7 @@ struct ResponseTests {
 
         // When/Then
         assertThrowsResponseError(.unexpectedDataType) {
-            _ = try response.image()
+            _ = try response.image(scale: 1)
         }
     }
 
