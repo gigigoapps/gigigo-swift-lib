@@ -74,7 +74,12 @@ public class Response: Selfie, @unchecked Sendable {
                 self.parseJSON()
             }
 
-            if !(200..<300).contains(self.statusCode), self.status == .unknownError {
+            // The HTTP status is authoritative: a non-2xx response must never be reported as
+            // `.success`, even when a Gigigo envelope claims `status: true`/`"OK"` (which
+            // `parseJSON()` would otherwise honour). If body parsing already mapped a specific
+            // error (`.apiError`, `.sessionExpired`, …) keep it; only override a still-unknown or
+            // wrongly-successful status with a synthesized HTTP error.
+            if !(200..<300).contains(self.statusCode), self.status == .unknownError || self.status == .success {
                 let fallbackError = NSError(
                     domain: kGIGNetworkErrorDomain,
                     code: self.statusCode,
