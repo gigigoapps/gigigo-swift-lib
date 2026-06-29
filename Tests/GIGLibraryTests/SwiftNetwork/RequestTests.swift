@@ -670,4 +670,191 @@ struct RequestTests {
         #expect(message.contains("\"id\" : 1"))
         #expect(message.contains("\"id\" : 2"))
     }
+
+    @Test("Given a base URL without a trailing slash and an endpoint without a leading slash, when fetch is called, then a single separator is inserted")
+    func fetchInsertsSeparatorBetweenBaseAndEndpoint() async throws {
+        // Given
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.respond(path: "/api/v1/items") { request in
+            capturedRequest = request
+        }
+
+        let request = Request.testRequest(
+            baseUrl: "https://example.com/api",
+            endpoint: "v1/items"
+        )
+
+        // When
+        _ = await request.fetch()
+
+        // Then
+        let urlRequest = try #require(capturedRequest)
+        let requestURL = try #require(urlRequest.url)
+        let components = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false))
+
+        #expect(components.path == "/api/v1/items")
+    }
+
+    @Test("Given a base URL with a trailing slash and an endpoint with a leading slash, when fetch is called, then the duplicate separator is collapsed")
+    func fetchCollapsesDoubleSeparatorBetweenBaseAndEndpoint() async throws {
+        // Given
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.respond(path: "/api/v1/items") { request in
+            capturedRequest = request
+        }
+
+        let request = Request.testRequest(
+            baseUrl: "https://example.com/api/",
+            endpoint: "/v1/items"
+        )
+
+        // When
+        _ = await request.fetch()
+
+        // Then
+        let urlRequest = try #require(capturedRequest)
+        let requestURL = try #require(urlRequest.url)
+        let components = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false))
+
+        #expect(components.path == "/api/v1/items")
+    }
+
+    @Test("Given URL params with an array and typed scalars, when fetch is called, then arrays expand and values are encoded by type")
+    func fetchEncodesUrlParamsByType() async throws {
+        // Given
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.respond(path: "/typed-params") { request in
+            capturedRequest = request
+        }
+
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/typed-params",
+            urlParams: [
+                "tags": ["swift", "ios"],
+                "count": 3,
+                "ratio": 1.5,
+                "enabled": true,
+                "name": "value"
+            ]
+        )
+
+        // When
+        _ = await request.fetch()
+
+        // Then
+        let urlRequest = try #require(capturedRequest)
+        let requestURL = try #require(urlRequest.url)
+        let components = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false))
+        let queryItems = components.queryItems ?? []
+        let values = { (name: String) in
+            queryItems.filter { $0.name == name }.compactMap { $0.value }
+        }
+
+        #expect(Set(values("tags")) == ["swift", "ios"])
+        #expect(values("count") == ["3"])
+        #expect(values("ratio") == ["1.5"])
+        #expect(values("enabled") == ["true"])
+        #expect(values("name") == ["value"])
+        // Regression guard: arrays must not serialize as a single "[swift, ios]" item.
+        #expect(values("tags").contains(where: { $0.contains("[") }) == false)
+    }
+
+    @Test("Given URL params bridged from JSON plus NSNull, when fetch is called, then bridged bool/number encode by type and NSNull is a valueless item")
+    func fetchEncodesBridgedAndNullUrlParams() async throws {
+        // Given params carrying ObjC-bridged types: JSONSerialization yields __NSCFBoolean / __NSCFNumber,
+        // which is where the Bool-vs-Int casting ambiguity would bite if the switch order were wrong.
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.respond(path: "/bridged-params") { request in
+            capturedRequest = request
+        }
+
+        let bridged = try #require(
+            try JSONSerialization.jsonObject(
+                with: Data(#"{"flag": true, "zero": 0, "one": 1, "n": 7}"#.utf8)
+            ) as? [String: Any]
+        )
+        var params = bridged
+        params["missing"] = NSNull()
+
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/bridged-params",
+            urlParams: params
+        )
+
+        // When
+        _ = await request.fetch()
+
+        // Then
+        let urlRequest = try #require(capturedRequest)
+        let requestURL = try #require(urlRequest.url)
+        let components = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false))
+        let queryItems = components.queryItems ?? []
+        let item = { (name: String) in queryItems.first(where: { $0.name == name }) }
+
+        #expect(item("flag")?.value == "true")
+        // Regression guard: bridged integer 0/1 must stay "0"/"1", never "false"/"true".
+        #expect(item("zero")?.value == "0")
+        #expect(item("one")?.value == "1")
+        #expect(item("n")?.value == "7")
+        // NSNull maps to a nil value: the key is present without an `=value`.
+        #expect(queryItems.contains(where: { $0.name == "missing" }))
+        #expect(item("missing")?.value == nil)
+    }
+
+    @Test("Given a base URL without a scheme, when fetch is called, then it returns an invalid URL response and does not send the request")
+    func fetchReturnsInvalidUrlForSchemelessBaseUrl() async {
+        // Given
+        var didReceiveRequest = false
+
+        MockURLProtocol.respond(path: "/schemeless") { _ in
+            didReceiveRequest = true
+        }
+
+        let request = Request.testRequest(
+            baseUrl: "example.com",
+            endpoint: "/schemeless"
+        )
+
+        // When
+        let response = await request.fetch()
+
+        // Then
+        #expect(response.status == .unknownError)
+        #expect(response.error?.code == URLError.badURL.rawValue)
+        #expect(didReceiveRequest == false)
+    }
+
+    @Test("Given a caller-injected URLSession, when fetch is called more than once, then the session is not invalidated and every call succeeds")
+    func fetchDoesNotInvalidateInjectedSession() async {
+        // Given a caller-owned session (C060: the fetch flow must not finishTasksAndInvalidate it,
+        // unlike the sessions it creates internally from a sessionConfiguration).
+        MockURLProtocol.respond(path: "/injected-session") { _ in }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+
+        let request = Request(
+            baseUrl: "https://example.com",
+            endpoint: "/injected-session",
+            session: session,
+            reachability: MockReachabilityProvider(reachable: true)
+        )
+
+        // When the same caller-owned session is reused across two fetches
+        let first = await request.fetch()
+        let second = await request.fetch()
+
+        // Then it was never invalidated — both calls reach the network and succeed. With the bug
+        // (invalidating an injected session), the second fetch would fail on a dead session.
+        #expect(first.status == .success)
+        #expect(second.status == .success)
+    }
 }

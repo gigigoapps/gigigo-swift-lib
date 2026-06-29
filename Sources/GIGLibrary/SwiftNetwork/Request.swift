@@ -9,13 +9,13 @@
 import Foundation
 import os
 
-public enum StandardType {
+public enum StandardType: Sendable {
     case gigigo
     case basic
 }
 
 /// See https://tools.ietf.org/html/rfc7231#section-4.3
-public enum HTTPMethod: String {
+public enum HTTPMethod: String, Sendable {
     case get     = "GET"
     case post    = "POST"
     case put     = "PUT"
@@ -41,7 +41,9 @@ public struct FileUploadData {
     }
 }
 
-private enum RequestBuildError: Error {
+// `internal` (not `private`) so `Request+URLBuilding.swift` can throw `.invalidURL` from the
+// extracted URL-composition helpers.
+enum RequestBuildError: Error {
     case invalidURL
     case bodyEncodingFailed
     case noInternet
@@ -233,9 +235,11 @@ public class Request: Selfie, @unchecked Sendable {
         do {
             try self.preChecks()
             let request = try self.buildRequest()
-            let (session, generation) = try self.prepareSession(for: request, applyCache: true)
+            let (session, generation, ownsSession) = try self.prepareSession(for: request, applyCache: true)
             defer {
-                session.finishTasksAndInvalidate()
+                if ownsSession {
+                    session.finishTasksAndInvalidate()
+                }
             }
 
             let operation = Task { try await session.data(for: request) }
@@ -319,9 +323,11 @@ public class Request: Selfie, @unchecked Sendable {
         do {
             try self.preChecks()
             let request = try self.buildRequest()
-            let (session, generation) = try self.prepareSession(for: request, applyCache: false)
+            let (session, generation, ownsSession) = try self.prepareSession(for: request, applyCache: false)
             defer {
-                session.finishTasksAndInvalidate()
+                if ownsSession {
+                    session.finishTasksAndInvalidate()
+                }
             }
 
             let operation = Task { try await session.download(for: request) }
@@ -362,9 +368,11 @@ public class Request: Selfie, @unchecked Sendable {
         do {
             try self.preChecks()
             let (request, bodyData) = try self.buildUploadRequest(files: files, params: params)
-            let (session, generation) = try self.prepareSession(for: request, bodyForLog: bodyData, applyCache: false)
+            let (session, generation, ownsSession) = try self.prepareSession(for: request, bodyForLog: bodyData, applyCache: false)
             defer {
-                session.finishTasksAndInvalidate()
+                if ownsSession {
+                    session.finishTasksAndInvalidate()
+                }
             }
 
             let operation = Task { try await session.upload(for: request, from: bodyData) }
@@ -409,9 +417,12 @@ public class Request: Selfie, @unchecked Sendable {
         }
     }
 
-    private func configuredSession(applyCache: Bool) -> URLSession {
+    /// Returns the session to use plus whether this instance *owns* it. An injected `self.session`
+    /// is owned by the caller and may back other in-flight tasks, so the fetch flow must never
+    /// invalidate it; only sessions created here are torn down with `finishTasksAndInvalidate()`.
+    private func configuredSession(applyCache: Bool) -> (session: URLSession, ownsSession: Bool) {
         if let session = self.session {
-            return session
+            return (session, false)
         }
 
         let configuration = self.sessionConfiguration ?? URLSessionConfiguration.default
@@ -420,7 +431,8 @@ public class Request: Selfie, @unchecked Sendable {
         if applyCache {
             self.controlCache(config: configuration)
         }
-        return URLSession(configuration: configuration, delegate: self as? URLSessionDelegate, delegateQueue: nil)
+        let session = URLSession(configuration: configuration, delegate: self as? URLSessionDelegate, delegateQueue: nil)
+        return (session, true)
     }
 
     private func logIfVerbose(_ response: Response) {
@@ -432,6 +444,13 @@ public class Request: Selfie, @unchecked Sendable {
     private func logRequestError(message: String) {
         guard self.verbose else { return }
         self.networkLogManager.log(message, info: self.logInfo)
+    }
+
+    // `internal` (not `private`) so `composeURL` in `Request+URLBuilding.swift` can report an
+    // unbuildable URL; the logging state it touches (`networkLogManager`, `logInfo`) is private.
+    func logInvalidURLBuildError() {
+        guard self.verbose else { return }
+        self.networkLogManager.log("not a valid URL", info: self.logInfo)
     }
 
     private func preChecks() throws {
@@ -475,7 +494,7 @@ public class Request: Selfie, @unchecked Sendable {
         for request: URLRequest,
         bodyForLog: Data? = nil,
         applyCache: Bool
-    ) throws -> (session: URLSession, generation: Int) {
+    ) throws -> (session: URLSession, generation: Int, ownsSession: Bool) {
         var requestForLog = request
         if let bodyForLog {
             requestForLog.httpBody = bodyForLog
@@ -486,16 +505,19 @@ public class Request: Selfie, @unchecked Sendable {
         // configured — so a superseding `fetch()` tears the previous one down without a timing shift.
         let generation = self.beginCancellationScope()
 
-        let session = self.configuredSession(applyCache: applyCache)
+        let (session, ownsSession) = self.configuredSession(applyCache: applyCache)
         if Task.isCancelled {
             // The caller installs `defer { session.finishTasksAndInvalidate() }` only on the
             // returned value, so invalidate here before throwing or this session (and the delegate
-            // it retains) would leak until ARC reclaims it.
-            session.finishTasksAndInvalidate()
+            // it retains) would leak until ARC reclaims it. Only sessions we created may be
+            // invalidated — an injected session is the caller's to manage.
+            if ownsSession {
+                session.finishTasksAndInvalidate()
+            }
             self.logRequestError(message: "Request cancelled before execution.")
             throw RequestBuildError.cancelledBeforeExecution
         }
-        return (session, generation)
+        return (session, generation, ownsSession)
     }
 
     private func buildUploadRequest(
@@ -518,14 +540,6 @@ public class Request: Selfie, @unchecked Sendable {
         var request = self.composeBaseRequest(url: url)
         try self.applyBodyAndContentTypeIfNeeded(to: &request)
         return request
-    }
-
-    private func composeURL() throws -> URL {
-        guard let urlString = self.buildURL(), let url = self.addParams(to: URLComponents(string: urlString)) else {
-            self.logInvalidURLBuildError()
-            throw RequestBuildError.invalidURL
-        }
-        return url
     }
 
     private func composeBaseRequest(url: URL) -> URLRequest {
@@ -587,31 +601,6 @@ public class Request: Selfie, @unchecked Sendable {
         }
     }
 
-    private func logInvalidURLBuildError() {
-        guard self.verbose else { return }
-        self.networkLogManager.log("not a valid URL", info: self.logInfo)
-    }
-
-    fileprivate func addParams(to urlComponents: URLComponents?) -> URL? {
-        guard var urlComponents else { return nil }
-        
-        if let urlParams = self.urlParams?.map({ key, value in
-            URLQueryItem(name: key, value: String(describing: value))
-        }) {
-            let urlConcat = concat(urlComponents.queryItems, urlParams)
-            urlComponents.queryItems = urlConcat
-        }
-        guard let string = urlComponents.string else { return nil }
-        return URL(string: string)
-    }
-    
-    fileprivate func buildURL() -> String? {
-        var url = URLComponents(string: self.baseURL)
-        url?.path += self.endpoint
-        
-        return url?.string
-    }
-	
 	fileprivate func logRequest(_ request: URLRequest) {
         guard self.verbose else { return }
 
@@ -667,16 +656,4 @@ public class Request: Selfie, @unchecked Sendable {
         data.append(boundaryData)
         return data
     }
-}
-
-func concat(_ lhs: [URLQueryItem]?, _ rhs: [URLQueryItem]?) -> [URLQueryItem] {
-	guard let left = lhs else {
-		return rhs ?? []
-	}
-	
-	guard let right = rhs else {
-		return left
-	}
-	
-	return left + right
 }

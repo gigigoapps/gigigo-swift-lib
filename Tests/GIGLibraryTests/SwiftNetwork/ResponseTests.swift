@@ -217,8 +217,8 @@ struct ResponseTests {
         }
     }
 
-    @Test("Given a GIF URL, when image is requested, then it throws unexpectedDataType")
-    func imageThrowsWhenGifURL() throws {
+    @Test("Given a GIF URL with undecodable data, when image is requested, then it throws unexpectedDataType")
+    func imageThrowsWhenGifDataIsInvalid() throws {
         // Given
         let url = try #require(URL(string: "https://example.com/animated.gif"))
         let response = makeImageResponse(body: Data([0x00, 0x01, 0x02]), url: url)
@@ -226,6 +226,47 @@ struct ResponseTests {
         // When/Then
         assertThrowsResponseError(.unexpectedDataType) {
             _ = try response.image()
+        }
+    }
+
+    @Test("Given a GIF URL with valid GIF data, when image is requested, then it returns a decoded image")
+    func imageDecodesValidGifData() throws {
+        // Given a minimal 1x1 transparent GIF89a
+        let gifData = try #require(Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"))
+        let url = try #require(URL(string: "https://example.com/animated.gif"))
+        let response = makeImageResponse(body: gifData, url: url)
+
+        // When
+        let image = try response.image()
+
+        // Then it went through the animated GIF decoder (UIImage.gif), not the single-frame fallback
+        #expect(image.images != nil)
+        #expect(image.size.width > 0)
+        #expect(image.size.height > 0)
+    }
+
+    @Test("Given HTTP status codes around the 2xx boundary, when Response parses, then only 200..<300 are success")
+    func responseTreatsOnly2xxAsSuccess() throws {
+        // Given
+        let url = try #require(URL(string: "https://example.com"))
+        let cases: [(code: Int, isSuccess: Bool)] = [
+            (199, false),
+            (200, true),
+            (204, true),
+            (299, true),
+            (300, false),
+            (301, false)
+        ]
+
+        for testCase in cases {
+            let httpResponse = HTTPURLResponse.fake(url: url, statusCode: testCase.code, headers: nil)
+
+            // When
+            let response = Response(data: nil, response: httpResponse, error: nil)
+
+            // Then
+            #expect((response.status == .success) == testCase.isSuccess)
+            #expect(response.statusCode == testCase.code)
         }
     }
 
