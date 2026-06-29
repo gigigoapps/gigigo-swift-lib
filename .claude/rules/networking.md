@@ -163,4 +163,4 @@ In tests: inject `NetworkLogManagerSpy` via the designated `init` to capture log
 - Only HTTP `200..<300` is `.success`; `300`+ map to an error status
 - `baseURL` must be an **absolute URL with a scheme** — a missing/invalid scheme yields an `.invalidURL` response
 - `endpoint` is **path-only**, joined to `baseURL` with exactly one `/` (no `//`, no missing slash). A `?query`/`#fragment` in `endpoint` is percent-encoded into the path; pass query items via `urlParams` or include them in `baseURL`
-- `urlParams` values are encoded by type (`String`/`Int`/`Double`/`Bool`→`true`/`false`/`NSNumber`); an array value expands to one item per element under the same name; `NSNull` yields a valueless item
+- `urlParams` values are encoded by type (`String`/`Int`/`Double`/`Bool`→`true`/`false`/`NSNumber`); an array value expands to one item per element under the same name; `NSNull` and non-finite `Double` (`NaN`/`±Inf`) yield a valueless item

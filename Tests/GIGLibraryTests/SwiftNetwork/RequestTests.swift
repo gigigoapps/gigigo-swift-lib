@@ -807,6 +807,38 @@ struct RequestTests {
         #expect(item("missing")?.value == nil)
     }
 
+    @Test("Given non-finite Double URL params, when fetch is called, then they are not serialized as nan/inf text")
+    func fetchDropsNonFiniteDoubleUrlParams() async throws {
+        // Given
+        var capturedRequest: URLRequest?
+
+        MockURLProtocol.respond(path: "/non-finite") { request in
+            capturedRequest = request
+        }
+
+        let request = Request.testRequest(
+            baseUrl: "https://example.com",
+            endpoint: "/non-finite",
+            urlParams: ["a": Double.nan, "b": Double.infinity, "ok": 1.5]
+        )
+
+        // When
+        _ = await request.fetch()
+
+        // Then
+        let urlRequest = try #require(capturedRequest)
+        let requestURL = try #require(urlRequest.url)
+        let components = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false))
+        let queryItems = components.queryItems ?? []
+        let item = { (name: String) in queryItems.first(where: { $0.name == name }) }
+
+        // Non-finite doubles become valueless items, never "nan"/"inf" garbage; finite values pass through.
+        #expect(item("a")?.value == nil)
+        #expect(item("b")?.value == nil)
+        #expect(item("ok")?.value == "1.5")
+        #expect(queryItems.allSatisfy { ($0.value ?? "") != "nan" && ($0.value ?? "") != "inf" })
+    }
+
     @Test("Given a base URL without a scheme, when fetch is called, then it returns an invalid URL response and does not send the request")
     func fetchReturnsInvalidUrlForSchemelessBaseUrl() async {
         // Given
