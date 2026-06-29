@@ -88,21 +88,50 @@ extension UIImage {
     }
     
     public func imageProportionally(with size: CGSize) -> UIImage? {
-        let widthRatio = size.width / self.size.width
-        let heightRatio = size.height / self.size.height
-        let newSize: CGSize
-        if widthRatio < heightRatio {
-            newSize = CGSize(width: self.size.width * heightRatio, height: self.size.height * heightRatio)
-        } else {
-            newSize = CGSize(width: self.size.width * widthRatio, height: self.size.height * widthRatio)
+        // If the target/source sizes are degenerate (e.g. a zero-bounds `UIImageView` in
+        // `ImageDownloader.handleResponse`), `aspectFillSize` returns nil and the original image is
+        // returned unchanged — `UIGraphicsImageRenderer` would otherwise trap with
+        // `NSInternalInconsistencyException` on a non-finite/zero-sized context.
+        guard let newSize = UIImage.aspectFillSize(for: self.size, fitting: size) else {
+            return self
         }
-        UIGraphicsBeginImageContextWithOptions(newSize, false, 0.0)
-        self.draw(in: CGRect(x: 0, y: 0, width: newSize.width, height: newSize.height))
-        let newImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        return newImage
+        // `UIGraphicsImageRenderer` replaces the deprecated UIGraphics* context API. It does not
+        // require the main actor (the `ImageDownloader` caller runs the resize on a detached task),
+        // and its default format uses the device screen scale, matching the previous `scale: 0.0`.
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            self.draw(in: CGRect(origin: .zero, size: newSize))
+        }
     }
-    
+
+    /// Computes the aspect-fill size that scales `source` to cover `target`, or `nil` when the
+    /// result cannot be drawn safely. Extracted as a pure, side-effect-free function so the guard
+    /// logic is unit-testable without a real graphics context.
+    ///
+    /// Returns nil when either size is non-positive, NaN or infinite, or when the scaled result
+    /// overflows to a non-finite value. `> 0` already rejects zero, negatives and NaN
+    /// (`NaN > 0` is `false`); the `.isFinite` checks additionally reject infinities. The final
+    /// check on `newSize` catches the overflow case the input guards cannot: a finite but very
+    /// large operand multiplied by the ratio can still reach infinity.
+    static func aspectFillSize(for source: CGSize, fitting target: CGSize) -> CGSize? {
+        guard target.width > 0, target.width.isFinite,
+              target.height > 0, target.height.isFinite,
+              source.width > 0, source.width.isFinite,
+              source.height > 0, source.height.isFinite else {
+            return nil
+        }
+        let widthRatio = target.width / source.width
+        let heightRatio = target.height / source.height
+        // Aspect-fill: scale by the larger ratio so the image covers the target size.
+        let ratio = max(widthRatio, heightRatio)
+        let newSize = CGSize(width: source.width * ratio, height: source.height * ratio)
+        guard newSize.width.isFinite, newSize.height.isFinite,
+              newSize.width > 0, newSize.height > 0 else {
+            return nil
+        }
+        return newSize
+    }
+
     // MARK: - Private Helpers
     
     internal class func delayForImageAtIndex(_ index: Int, source: CGImageSource) -> Double {
