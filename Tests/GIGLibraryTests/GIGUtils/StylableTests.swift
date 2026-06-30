@@ -139,6 +139,23 @@ class StylableTests: XCTestCase {
         XCTAssertNotEqual(sut.backgroundImage(for: .normal), sut.backgroundImage(for: .disabled))
     }
 
+    func test_restyling_Button_clears_stale_disabled_background() {
+        // A reused button first styled by color sets a .disabled dim image. Restyling it
+        // with an explicit backgroundImage must not leave that stale .disabled image behind.
+        let sut = UIButton(frame: CGRect(x: 0, y: 0, width: 0, height: 0))
+        let textStyle = TextStyle(font: UIFont.systemFont(ofSize: 10))
+        sut.withStyle(ButtonStyle(textStyle: textStyle, viewStyle: ViewStyle(backgroundColor: .red)))
+        XCTAssertNotNil(sut.backgroundImage(for: .disabled), "color style should install a disabled dim image")
+
+        let explicitImage = UIImage.create(from: .blue)
+        sut.withStyle(ButtonStyle(textStyle: textStyle, backgroundImage: explicitImage))
+        XCTAssertEqual(sut.backgroundImage(for: .normal), explicitImage)
+        // No explicit .disabled image now, so UIKit falls back to the new .normal image —
+        // the stale color dim is gone (it would NOT equal the new image if it had leaked).
+        XCTAssertEqual(sut.backgroundImage(for: .disabled), explicitImage,
+                       "stale disabled dim must be cleared so the new style's image is used")
+    }
+
     func test_dottedBorder_addsSingleOverlay_and_resetRemovesItOnly() {
         // C030/C031: the dashed border is a dedicated overlay subview. Applying it must add
         // exactly one overlay (no accumulation on re-style), resetBorders must remove that
