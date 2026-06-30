@@ -3,7 +3,7 @@ import UIKit
 @testable import GIGLibrary
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .timeLimit(.minutes(1)))
 struct ImageDownloaderTests {
 
     // MARK: - Configuration
@@ -89,9 +89,11 @@ struct ImageDownloaderTests {
         #expect(ImageDownloader.activeDownloads == 1)
 
         // The slot is freed as soon as the (mocked) network finishes; the image is cached after the
-        // resize completes on the cooperative pool.
-        let cached = await waitUntil { ImageDownloader.images[urlString] != nil }
-        #expect(cached)
+        // resize completes on the cooperative pool. Await the cache write deterministically instead
+        // of polling: under CI load the `.utility` resize task can be scheduled late, which used to
+        // exhaust `waitUntil`'s deadline and flake. See `awaitCache`.
+        await awaitCache(of: urlString)
+        #expect(ImageDownloader.images[urlString] != nil)
         #expect(ImageDownloader.activeDownloads == 0)
     }
 
@@ -210,8 +212,8 @@ struct ImageDownloaderTests {
         let view = makeImageView()
         ImageDownloader.shared.download(url: urlString, for: view, placeholder: nil)
 
-        let cached = await waitUntil { ImageDownloader.images[urlString] != nil }
-        #expect(cached)
+        await awaitCache(of: urlString)
+        #expect(ImageDownloader.images[urlString] != nil)
         #expect(ImageDownloader.images[urlString]?.images != nil)
         #expect(ImageDownloader.activeDownloads == 0)
     }
@@ -262,6 +264,25 @@ struct ImageDownloaderTests {
         return makeImage(.red).pngData() ?? Data()
     }
 
+    /// Awaits the success-path cache write for `cacheKey` deterministically. `download(...)` is
+    /// fire-and-forget, so we install the DEBUG cache hook and suspend until the resize → cache step
+    /// fires it. Unlike `waitUntil`, this carries no deadline: when the `.utility` resize task is
+    /// scheduled late under CI load it simply waits for the real signal instead of racing a timeout
+    /// and flaking. The `.timeLimit` suite trait is the backstop against a genuine hang.
+    ///
+    /// Safe to install the hook here (rather than before `download`): the caller is `@MainActor`, so
+    /// the unstructured download `Task` and its detached resize cannot run until this function
+    /// suspends at the `await` below — the signal can never fire before the hook is in place.
+    private func awaitCache(of cacheKey: String) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            ImageDownloader.didCacheImageForTesting = { written in
+                guard written == cacheKey else { return }
+                ImageDownloader.didCacheImageForTesting = nil
+                continuation.resume()
+            }
+        }
+    }
+
     /// Polls `condition` on the MainActor until it is true or the timeout elapses. Returns as soon
     /// as the condition holds, so warm runs finish in milliseconds. The timeout is generous because
     /// the first test that chains async hops pays a one-time concurrency-runtime/simulator warm-up
@@ -290,6 +311,7 @@ extension ImageDownloader {
         maxConcurrentDownloads = 6  // setter clamps and pumps (a no-op while the stack is empty)
         requestProvider = { url in Request(method: .get, baseUrl: url, endpoint: "", bodyParams: nil) }
         fetchProvider = { request in await request.fetch() }
+        didCacheImageForTesting = nil
     }
 }
 
