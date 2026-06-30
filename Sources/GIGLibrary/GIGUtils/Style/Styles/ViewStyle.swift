@@ -1,19 +1,18 @@
 import UIKit
 
 public struct ViewStyle {
-    var borderColor: UIColor
-    var borderWidth: CGFloat
-    var someBorders: [Border]
-    var dottedBorders: Bool
-    var cornerRadius: CGFloat?
-    var shadowColor: UIColor
-    var shadowOffset: CGSize
-    var shadowOpacity: Float
-    var shadowRadius: CGFloat
-    var backgroundColor: UIColor
-    
-    /// If set dottedBorders, someBorders not apply
-    /// If set dottedBorders, someBorders not apply
+    let borderColor: UIColor
+    let borderWidth: CGFloat
+    let someBorders: [Border]
+    let dottedBorders: Bool
+    let cornerRadius: CGFloat?
+    let shadowColor: UIColor
+    let shadowOffset: CGSize
+    let shadowOpacity: Float
+    let shadowRadius: CGFloat
+    let backgroundColor: UIColor
+
+    /// If set, dottedBorders takes precedence and someBorders is not applied.
     public init(
         borderColor: UIColor = .clear,
         borderWidth: CGFloat = 0.0,
@@ -24,7 +23,7 @@ public struct ViewStyle {
         shadowOpacity: Float = 0.0,
         shadowRadius: CGFloat = 0.0,
         cornerRadius: CGFloat? = nil,
-        backgroundColor: UIColor = .white
+        backgroundColor: UIColor = .clear
     ) {
         
         self.borderColor = borderColor

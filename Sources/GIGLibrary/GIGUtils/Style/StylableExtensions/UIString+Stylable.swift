@@ -16,12 +16,14 @@ public extension String {
         
         if style.isStrikedThrough {
             attrString.addAttribute(NSAttributedString.Key.strikethroughStyle,
-                                    value: 2,
-                                    range: NSRange(location: 0, length: attrString.length) )
+                                    value: NSUnderlineStyle.single.rawValue,
+                                    range: NSRange(location: 0, length: attrString.length))
             attrString.addAttribute(NSAttributedString.Key.strikethroughColor,
                                     value: style.foregroundColor,
                                     range: NSRange(location: 0, length: attrString.length))
-        } else if let space = style.letterSpacing {
+        }
+
+        if let space = style.letterSpacing {
             attrString.addAttribute(NSAttributedString.Key.kern, value: space, range: NSRange(location: 0, length: attrString.length))
         }
         return attrString

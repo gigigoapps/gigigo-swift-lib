@@ -6,10 +6,9 @@ public struct ButtonStyle {
     let viewStyle: ViewStyle?
     let backgroundImage: UIImage?
     
-    /// Its possible to set attributted text and ViewStyle to Label individually,
+    /// It's possible to set attributed text and ViewStyle to a Button individually,
     /// or use this init.
-    
-    /// If set backgroundImage backgroundColor from viewStyle is not apply.
+    /// If set, backgroundImage takes precedence and backgroundColor from viewStyle is not applied.
     public init(
         textStyle: TextStyle,
         tintColor: UIColor? = nil,
