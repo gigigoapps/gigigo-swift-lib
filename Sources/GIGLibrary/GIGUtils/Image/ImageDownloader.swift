@@ -36,6 +36,14 @@ struct ImageDownloader {
     static var fetchProvider: (_ request: Request) async -> Response = { request in
         await request.fetch()
     }
+
+    /// Seam used only by DEBUG builds: fired on the MainActor immediately after a successful
+    /// download's decode → resize step has written the image to `images`, carrying the cache key
+    /// (`request.baseURL`). It lets tests await that step deterministically instead of polling with
+    /// a timeout, so they cannot flake when the `.utility` resize task is scheduled late under CI
+    /// load — they wait for the real signal rather than racing a deadline. `nil` by default and
+    /// absent from release builds — see `handleResponse(_:view:request:)`.
+    static var didCacheImageForTesting: (@MainActor (_ cacheKey: String) -> Void)?
     #endif
 
     /// Backing store for `maxConcurrentDownloads`, always clamped to a minimum of 1.
@@ -191,6 +199,9 @@ struct ImageDownloader {
                     self.setAnimated(image: finalImage, in: view)
                     ImageDownloader.images[request.baseURL] = finalImage
                     ImageDownloader.queue.removeValue(forKey: view)
+                    #if DEBUG
+                    ImageDownloader.didCacheImageForTesting?(request.baseURL)
+                    #endif
                 }
             }
         default:
