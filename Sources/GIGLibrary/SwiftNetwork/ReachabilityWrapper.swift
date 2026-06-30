@@ -96,12 +96,13 @@ public class ReachabilityWrapper: ReachabilityInput, @unchecked Sendable {
         return self.reachability?.connection == .wifi
     }
 
-    // MARK: - Private methods
-
-    /// Idempotent: a second call is a no-op so the wrapper never registers a
-    /// duplicate `NotificationCenter` observer (which would double-fire
-    /// `reachabilityChanged`). Lifecycle is owned by `init`/`deinit`.
-    private func startNotifier() {
+    /// Starts (or resumes) reachability monitoring. Idempotent: a second call
+    /// while already running is a no-op, so it never registers a duplicate
+    /// `NotificationCenter` observer (which would double-fire `reachabilityChanged`).
+    /// `init` calls this on creation; it stays `public` so callers can pause and
+    /// resume monitoring (e.g. around logout/background) via `stopNotifier()` then
+    /// `startNotifier()`.
+    public func startNotifier() {
         let snapshot = self.currentNetworkStatus()
         let shouldStart = state.withLockUnchecked { state -> Bool in
             guard !state.isRunning else { return false }
@@ -120,8 +121,9 @@ public class ReachabilityWrapper: ReachabilityInput, @unchecked Sendable {
         _ = try? self.reachability?.startNotifier()
     }
 
-    /// Idempotent counterpart to `startNotifier`.
-    private func stopNotifier() {
+    /// Stops reachability monitoring. Idempotent counterpart to `startNotifier`;
+    /// safe to call when already stopped.
+    public func stopNotifier() {
         let shouldStop = state.withLockUnchecked { state -> Bool in
             guard state.isRunning else { return false }
             state.isRunning = false
@@ -136,6 +138,8 @@ public class ReachabilityWrapper: ReachabilityInput, @unchecked Sendable {
         )
         self.reachability?.stopNotifier()
     }
+
+    // MARK: - Private helpers
 
     private func currentNetworkStatus() -> NetworkStatus {
         return Self.networkStatus(for: self.reachability?.connection)
