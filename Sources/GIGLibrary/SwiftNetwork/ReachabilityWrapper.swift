@@ -103,40 +103,49 @@ public class ReachabilityWrapper: ReachabilityInput, @unchecked Sendable {
     /// resume monitoring (e.g. around logout/background) via `stopNotifier()` then
     /// `startNotifier()`.
     public func startNotifier() {
-        let snapshot = self.currentNetworkStatus()
-        let shouldStart = state.withLockUnchecked { state -> Bool in
-            guard !state.isRunning else { return false }
+        // The state transition AND the observer/notifier side effects run inside a
+        // single critical section, so `isRunning` can never desync from the real
+        // lifecycle under concurrent start/stop calls from different queues.
+        // Deadlock-safe: `Reachability` posts its notifications asynchronously (on
+        // the main queue), so `reachabilityChanged(_:)` cannot re-enter this lock
+        // synchronously while we hold it. These are system calls, not user code.
+        state.withLockUnchecked { state in
+            guard !state.isRunning else { return }
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(reachabilityChanged(_:)),
+                name: .reachabilityChanged,
+                object: reachability
+            )
+            do {
+                try self.reachability?.startNotifier()
+            } catch {
+                // Startup failed (callback/dispatch-queue install): undo the
+                // observer and stay "not running" so a later startNotifier() can
+                // retry, instead of believing monitoring is live.
+                NotificationCenter.default.removeObserver(self, name: .reachabilityChanged, object: reachability)
+                return
+            }
+            state.currentStatus = self.currentNetworkStatus()
             state.isRunning = true
-            state.currentStatus = snapshot
-            return true
         }
-        guard shouldStart else { return }
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(reachabilityChanged(_:)),
-            name: .reachabilityChanged,
-            object: reachability
-        )
-        _ = try? self.reachability?.startNotifier()
     }
 
     /// Stops reachability monitoring. Idempotent counterpart to `startNotifier`;
     /// safe to call when already stopped.
     public func stopNotifier() {
-        let shouldStop = state.withLockUnchecked { state -> Bool in
-            guard state.isRunning else { return false }
+        // Same single-critical-section discipline as `startNotifier`: tear down the
+        // observer/notifier and flip the flag atomically.
+        state.withLockUnchecked { state in
+            guard state.isRunning else { return }
+            NotificationCenter.default.removeObserver(
+                self,
+                name: .reachabilityChanged,
+                object: reachability
+            )
+            self.reachability?.stopNotifier()
             state.isRunning = false
-            return true
         }
-        guard shouldStop else { return }
-
-        NotificationCenter.default.removeObserver(
-            self,
-            name: .reachabilityChanged,
-            object: reachability
-        )
-        self.reachability?.stopNotifier()
     }
 
     // MARK: - Private helpers

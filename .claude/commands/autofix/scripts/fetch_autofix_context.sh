@@ -64,11 +64,11 @@ if [[ -n "$EXPLICIT_BASE" ]]; then
     exit 1
   fi
 else
-  # Candidate base branches in priority order (develop/master first so they win
-  # ties at a shared fork point), then every release/* and hotfix/* train.
+  # Candidate base branches in priority order (develop/main/master first so they
+  # win ties at a shared fork point), then every release/* and hotfix/* train.
   CANDIDATES=$(
     {
-      for r in origin/develop origin/master; do
+      for r in origin/develop origin/main origin/master; do
         git rev-parse --verify --quiet "$r" >/dev/null 2>&1 && printf '%s\n' "$r"
       done
       git for-each-ref --format='%(refname:short)' \
@@ -86,7 +86,7 @@ else
   done
   if [[ -z "$BASE_REF" ]]; then
     echo "ERROR: could not auto-detect a base branch." >&2
-    echo "No origin/develop, origin/master, origin/release/* or origin/hotfix/* found." >&2
+    echo "No origin/develop, origin/main, origin/master, origin/release/* or origin/hotfix/* found." >&2
     echo "Pass an explicit base: fetch_autofix_context.sh <base-ref>" >&2
     exit 1
   fi
@@ -98,14 +98,12 @@ MERGE_BASE=$(git merge-base "$BASE_REF" HEAD) || {
   exit 1
 }
 
-# Build the full "all local changes vs base" diff WITHOUT touching the user's
-# index or worktree. We populate a throwaway index from HEAD, stage every local
-# change into it (tracked edits, staged-only hunks, AND untracked files), then
-# diff the merge-base against that index. This captures committed + staged +
-# unstaged + untracked in one deduped pass — `git diff "$MERGE_BASE"` alone would
-# miss a hunk that was `git add`ed and then reverted in the worktree, since it
-# only compares the base to the working tree. `git add -A` honours .gitignore, so
-# ignored files stay out. GIT_INDEX_FILE isolates all of this to the temp index.
+# Build the "all local changes vs base" diff WITHOUT touching the user's index or
+# worktree. Populate a throwaway index from HEAD and `git add -A` to overlay the
+# working tree, then diff the merge-base against it. This captures committed +
+# unstaged + untracked + any staged hunk that is also present in the worktree.
+# `git add -A` honours .gitignore, so ignored files stay out. GIT_INDEX_FILE
+# isolates all of this to the temp index — the real index/worktree are untouched.
 TMP_INDEX=$(mktemp "${TMPDIR:-/tmp}/autofix-index.XXXXXX")
 trap 'rm -f "$TMP_INDEX"' EXIT
 if ! GIT_INDEX_FILE="$TMP_INDEX" git read-tree HEAD 2>/dev/null; then
@@ -114,6 +112,18 @@ if ! GIT_INDEX_FILE="$TMP_INDEX" git read-tree HEAD 2>/dev/null; then
 fi
 GIT_INDEX_FILE="$TMP_INDEX" git add -A
 DIFF=$(GIT_INDEX_FILE="$TMP_INDEX" git diff --cached "$MERGE_BASE")
+
+# `git add -A` overlays the working tree, so a hunk that was `git add`ed and then
+# reverted in the worktree (index-only) would not appear above. Append the
+# staged-vs-HEAD diff so such index-only changes are never dropped. In the normal
+# /autofix flow nothing is staged (the session edits the worktree), so this branch
+# is skipped and adds nothing; it only fires when the user has pre-staged work.
+if ! git diff --cached --quiet HEAD 2>/dev/null; then
+  STAGED=$(git diff --cached HEAD)
+  if [[ -n "${STAGED//[$'\n\t ']/}" ]]; then
+    DIFF+=$'\n\n### Additionally staged in the index (git diff --cached HEAD) — may overlap the diff above\n\n'"$STAGED"
+  fi
+fi
 
 if [[ -z "${DIFF//[$'\n\t ']/}" ]]; then
   echo "ERROR: no local changes to review against '$BASE_REF' (merge-base ${MERGE_BASE:0:12})." >&2
