@@ -36,9 +36,10 @@ private final class DottedBorderView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         // Inherit the host's corner radius; it may be set after the border is attached.
+        // The rounding comes from the bezier path itself — the layer's own `cornerRadius`
+        // has no effect on a path-stroked CAShapeLayer, so it is not set here.
         let radius = superview?.layer.cornerRadius ?? 0
         shapeLayer.frame = bounds
-        shapeLayer.cornerRadius = radius
         shapeLayer.path = UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
     }
 }
