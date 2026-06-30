@@ -93,12 +93,25 @@ public extension UIView {
         let borderView = DottedBorderView(weight: weight, color: color)
         borderView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(borderView)
-        NSLayoutConstraint.activate([
-            borderView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            borderView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            borderView.topAnchor.constraint(equalTo: topAnchor),
-            borderView.bottomAnchor.constraint(equalTo: bottomAnchor)
-        ])
+        // On a scroll view, pin to the frame layout guide so the border tracks the viewport
+        // instead of becoming scrollable content (which would also perturb `contentSize`).
+        // Other views pin to their own edges.
+        if let scrollView = self as? UIScrollView {
+            let guide = scrollView.frameLayoutGuide
+            NSLayoutConstraint.activate([
+                borderView.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
+                borderView.trailingAnchor.constraint(equalTo: guide.trailingAnchor),
+                borderView.topAnchor.constraint(equalTo: guide.topAnchor),
+                borderView.bottomAnchor.constraint(equalTo: guide.bottomAnchor)
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                borderView.leadingAnchor.constraint(equalTo: leadingAnchor),
+                borderView.trailingAnchor.constraint(equalTo: trailingAnchor),
+                borderView.topAnchor.constraint(equalTo: topAnchor),
+                borderView.bottomAnchor.constraint(equalTo: bottomAnchor)
+            ])
+        }
     }
 	
 	func resetBorder(_ border: Border) {

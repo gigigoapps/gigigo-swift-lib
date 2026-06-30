@@ -17,10 +17,16 @@ extension UIButton: Stylable {
 
         if let image = style.backgroundImage {
             setBackgroundImage(image, for: .normal)
-        } else if let styled = self as? StyledButton {
+            // Image takes precedence: drop any cached state-aware colours so a later
+            // `isEnabled` change doesn't repaint a stale background behind the image.
+            (self as? StyledButton)?.setStatefulBackgroundColors(enabled: nil, disabled: nil)
+        } else if let styled = self as? StyledButton,
+                  style.viewStyle != nil || style.disabledBackgroundColor != nil {
             // `StyledButton` tracks `isEnabled` and swaps between the two dynamic colours, so
             // the disabled background is state-aware and re-resolves on trait changes. The
             // enabled colour comes from `viewStyle.backgroundColor` (already applied above).
+            // Only (re)configure when the style carries background info — a text-only restyle
+            // leaves the button's existing state-aware colours untouched.
             styled.setStatefulBackgroundColors(enabled: style.viewStyle?.backgroundColor,
                                                disabled: style.disabledBackgroundColor)
         }
