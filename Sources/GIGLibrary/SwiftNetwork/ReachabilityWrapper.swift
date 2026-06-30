@@ -73,6 +73,9 @@ public class ReachabilityWrapper: ReachabilityInput, @unchecked Sendable {
     /// Dependency-injection seam (internal): builds an instance that does **not**
     /// start the live notifier, so the lock-backed status/delegate/debounce logic
     /// can be exercised in isolation. The shared singleton always uses `init()`.
+    /// `currentStatus` deliberately starts at `.notReachable` here (unlike `init()`,
+    /// which seeds it from the live connection via `startNotifier()`), giving tests
+    /// a known initial state.
     init(reachability: Reachability?) {
         self.reachability = reachability
     }
