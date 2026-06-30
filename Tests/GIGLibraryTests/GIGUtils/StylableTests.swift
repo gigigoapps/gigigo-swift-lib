@@ -168,6 +168,45 @@ class StylableTests: XCTestCase {
         XCTAssertEqual(sut.backgroundColor, .systemBackground, "re-enabling restores the enabled colour — no stuck state")
     }
 
+    func test_StyledButton_textOnly_restyle_preserves_stateful_background() {
+        // A typography-only restyle (no viewStyle/backgroundImage/disabledBackgroundColor)
+        // must not wipe the StyledButton's cached state-aware colours.
+        let sut = StyledButton(frame: CGRect(x: 0, y: 0, width: 0, height: 0))
+        sut.withStyle(ButtonStyle(textStyle: TextStyle(font: UIFont.systemFont(ofSize: 10)),
+                                  viewStyle: ViewStyle(backgroundColor: .systemBackground),
+                                  disabledBackgroundColor: .systemGray))
+
+        sut.withStyle(ButtonStyle(textStyle: TextStyle(font: UIFont.boldSystemFont(ofSize: 14))))
+        XCTAssertEqual(sut.backgroundColor, .systemBackground, "enabled colour must survive a text-only restyle")
+        sut.isEnabled = false
+        XCTAssertEqual(sut.backgroundColor, .systemGray, "disabled colour must survive a text-only restyle")
+    }
+
+    func test_StyledButton_image_style_clears_stateful_colors() {
+        // Switching a StyledButton to an image-backed style must clear the cached colours so a
+        // later isEnabled change does not repaint a stale background behind the image.
+        let sut = StyledButton(frame: CGRect(x: 0, y: 0, width: 0, height: 0))
+        sut.withStyle(ButtonStyle(textStyle: TextStyle(font: UIFont.systemFont(ofSize: 10)),
+                                  viewStyle: ViewStyle(backgroundColor: .red),
+                                  disabledBackgroundColor: .gray))
+        sut.withStyle(ButtonStyle(textStyle: TextStyle(font: UIFont.systemFont(ofSize: 10)),
+                                  backgroundImage: UIImage.create(from: .blue)))
+
+        sut.isEnabled = false
+        XCTAssertNil(sut.backgroundColor, "stateful colours must be cleared when switching to an image style")
+    }
+
+    func test_dottedBorder_on_scrollView_pins_to_frameLayoutGuide() {
+        // C031 follow-up: on a scroll view the dashed border must pin to the frame layout guide
+        // (viewport), not the content area, so it doesn't scroll or perturb contentSize.
+        let sut = UIScrollView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        sut.withViewStyle(ViewStyle(borderColor: .red, borderWidth: 1, dottedBorders: true))
+
+        let guide = sut.frameLayoutGuide
+        let pinsToFrameGuide = sut.constraints.contains { $0.firstItem === guide || $0.secondItem === guide }
+        XCTAssertTrue(pinsToFrameGuide, "dashed border on a scroll view must pin to the frame layout guide")
+    }
+
     func test_StyledButton_without_disabledColor_keeps_enabled_color_when_disabled() {
         // When no disabledBackgroundColor is provided, the enabled colour is used for both
         // states (no dimming), so the behaviour matches a plain styled button.
