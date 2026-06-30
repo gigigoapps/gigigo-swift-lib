@@ -98,32 +98,22 @@ MERGE_BASE=$(git merge-base "$BASE_REF" HEAD) || {
   exit 1
 }
 
-# Diff the merge-base against the WORKING TREE (no '..HEAD'), so committed,
-# staged and unstaged changes of tracked files are all captured. This is the
-# bulk of "estos cambios".
-DIFF=$(git diff "$MERGE_BASE")
-
-# Untracked new files don't appear in `git diff`, but on a pre-PR branch they're
-# often the most important thing to review. Append each as an additions-only
-# diff via `git diff --no-index` — this is read-only (it never touches the
-# index, so the user's staging area is left untouched). `--no-index` exits 1
-# when a difference exists (the normal case); a status >1 is a genuine error
-# (unreadable file, etc.), which we surface on stderr instead of swallowing.
-UNTRACKED=$(git ls-files --others --exclude-standard)
-if [[ -n "$UNTRACKED" ]]; then
-  while IFS= read -r f; do
-    [[ -z "$f" ]] && continue
-    if out=$(git diff --no-index -- /dev/null "$f" 2>/dev/null); then
-      rc=0
-    else
-      rc=$?
-    fi
-    if (( rc > 1 )); then
-      echo "WARNING: could not diff untracked file '$f' (git exit $rc); omitted from brief." >&2
-    fi
-    DIFF+=$'\n'"$out"
-  done <<< "$UNTRACKED"
+# Build the full "all local changes vs base" diff WITHOUT touching the user's
+# index or worktree. We populate a throwaway index from HEAD, stage every local
+# change into it (tracked edits, staged-only hunks, AND untracked files), then
+# diff the merge-base against that index. This captures committed + staged +
+# unstaged + untracked in one deduped pass — `git diff "$MERGE_BASE"` alone would
+# miss a hunk that was `git add`ed and then reverted in the worktree, since it
+# only compares the base to the working tree. `git add -A` honours .gitignore, so
+# ignored files stay out. GIT_INDEX_FILE isolates all of this to the temp index.
+TMP_INDEX=$(mktemp "${TMPDIR:-/tmp}/autofix-index.XXXXXX")
+trap 'rm -f "$TMP_INDEX"' EXIT
+if ! GIT_INDEX_FILE="$TMP_INDEX" git read-tree HEAD 2>/dev/null; then
+  echo "ERROR: could not seed a temporary index from HEAD." >&2
+  exit 1
 fi
+GIT_INDEX_FILE="$TMP_INDEX" git add -A
+DIFF=$(GIT_INDEX_FILE="$TMP_INDEX" git diff --cached "$MERGE_BASE")
 
 if [[ -z "${DIFF//[$'\n\t ']/}" ]]; then
   echo "ERROR: no local changes to review against '$BASE_REF' (merge-base ${MERGE_BASE:0:12})." >&2
@@ -173,7 +163,7 @@ for f in .claude/rules/*.md; do
 done
 
 echo ""
-echo "## Diff (merge-base of $BASE_REF..HEAD → working tree)"
+echo "## Diff (merge-base of $BASE_REF..HEAD → all local changes: committed + staged + unstaged + untracked)"
 echo ""
 DIFF_LINES=$(printf '%s\n' "$DIFF" | wc -l | tr -d ' ')
 if (( DIFF_LINES > 5000 )); then

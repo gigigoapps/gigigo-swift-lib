@@ -37,7 +37,7 @@ public func >= (levelA: LogLevel, levelB: LogLevel) -> Bool {
     return levelA.rawValue >= levelB.rawValue
 }
 
-public protocol LoggableModule: Sendable {
+public protocol LoggableModule {
     static var Identifier: String { get }
 }
 

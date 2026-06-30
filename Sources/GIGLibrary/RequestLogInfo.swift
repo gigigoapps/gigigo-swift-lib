@@ -18,7 +18,11 @@ public protocol RequestLogInfo: Sendable {
 }
 
 public struct DefaultRequestLogInfo: RequestLogInfo {
-    public let module: LoggableModule.Type
+    // `module` is a metatype (immutable type metadata), which is safe to share
+    // across concurrency domains. `nonisolated(unsafe)` lets this struct satisfy
+    // `Sendable` without forcing every `LoggableModule` conformer to be `Sendable`
+    // (those are static-metadata type tags, often non-Sendable classes).
+    public nonisolated(unsafe) let module: LoggableModule.Type
     public let filename: String
     public let line: Int
     public let funcname: String
