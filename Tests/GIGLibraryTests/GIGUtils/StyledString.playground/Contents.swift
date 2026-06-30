@@ -13,19 +13,19 @@ label.numberOfLines = 2
 
 // MARK: Example 1
 
-label.styledString = "Este es mi texto "
+label.styledString("Este es mi texto "
                     + "con estilo ".style(.bold,
                                           .underline,
                                           .underlineColor(UIColor.yellow))
                     + "rojo \n".style(.color(.red),
                                       .bold)
-                    + "mola".style(.backgroundColor(UIColor.red))
+                    + "mola".style(.backgroundColor(UIColor.red)))
 
 label
 
 // MARK: Example 2
 
-label.styledString = "fuente 1 " + "fuente 2".style(.fontName("ArialMT"))
+label.styledString("fuente 1 " + "fuente 2".style(.fontName("ArialMT")))
 
 // MARK: Example 2
 
@@ -37,14 +37,14 @@ textView.attributedText = ("Pincha en este " + "link".style(.link(url))).toAttri
 // MARK: Example 2
 var font = UIFont(name: "ArialMT", size: 15)!
 label.font = font
-label.styledString = "numero: " + "10".style(.size(50), .bold) + ".22".style(.size(20), .italic)
+label.styledString("numero: " + "10".style(.size(50), .bold) + ".22".style(.size(20), .italic))
 
-label.styledString = "Acepta los"
+label.styledString("Acepta los"
                     + " terminos y condiciones".style(.italic)
                     + " antes de recibir los"
                     + " 22".style(.size(20), .color(UIColor.red))
                     + ".35".style(.size(10), .color(UIColor.red))
-                    + " Euros"
+                    + " Euros")
 
 label
 
@@ -52,8 +52,8 @@ label
 
 // MARK: Example 1
 
-label.html = "texto <b>importante</b>"
+label.html("texto <b>importante</b>")
 
 // MARK: Example 2
 
-label.html = "texto <b style=\"color:red;\">importante</b>"
+label.html("texto <b style=\"color:red;\">importante</b>")
