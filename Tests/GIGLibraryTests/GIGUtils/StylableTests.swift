@@ -122,8 +122,9 @@ class StylableTests: XCTestCase {
     }
 
     func test_applyStyle_to_disabled_Button_does_not_persist_dim() {
-        // C027: a button styled while disabled must not keep the 30% dim baked into
-        // backgroundColor after it is re-enabled. The background is now state-aware.
+        // C027: a button styled while disabled must not get a 30% dim baked into
+        // backgroundColor (which is not state-aware and would stick after re-enabling).
+        // The background colour is applied at full opacity, with no per-state image.
         let sut = UIButton(frame: CGRect(x: 0, y: 0, width: 0, height: 0))
         sut.isEnabled = false
         let viewStyle = ViewStyle(backgroundColor: .red)
@@ -131,29 +132,34 @@ class StylableTests: XCTestCase {
                                       viewStyle: viewStyle)
         sut.withStyle(buttonStyle)
 
-        // backgroundColor is not used for the fill, so re-enabling cannot leave a stuck dim.
-        XCTAssertNil(sut.backgroundColor)
-        // Enabled and disabled appearances are provided as separate, state-specific images.
-        XCTAssertNotNil(sut.backgroundImage(for: .normal))
-        XCTAssertNotNil(sut.backgroundImage(for: .disabled))
-        XCTAssertNotEqual(sut.backgroundImage(for: .normal), sut.backgroundImage(for: .disabled))
+        XCTAssertEqual(sut.backgroundColor, .red, "background must be the full colour, not a dimmed variant")
+        XCTAssertNil(sut.backgroundImage(for: .normal))
     }
 
-    func test_restyling_Button_clears_stale_disabled_background() {
-        // A reused button first styled by color sets a .disabled dim image. Restyling it
-        // with an explicit backgroundImage must not leave that stale .disabled image behind.
+    func test_colorStyle_keeps_dynamic_backgroundColor() {
+        // The background colour is assigned directly (not rendered into a 1×1 image), so a
+        // dynamic UIColor is preserved as-is and re-resolves on light/dark trait changes.
         let sut = UIButton(frame: CGRect(x: 0, y: 0, width: 0, height: 0))
-        let textStyle = TextStyle(font: UIFont.systemFont(ofSize: 10))
-        sut.withStyle(ButtonStyle(textStyle: textStyle, viewStyle: ViewStyle(backgroundColor: .red)))
-        XCTAssertNotNil(sut.backgroundImage(for: .disabled), "color style should install a disabled dim image")
+        let buttonStyle = ButtonStyle(textStyle: TextStyle(font: UIFont.systemFont(ofSize: 10)),
+                                      viewStyle: ViewStyle(backgroundColor: .systemBackground))
+        sut.withStyle(buttonStyle)
 
+        XCTAssertEqual(sut.backgroundColor, .systemBackground, "dynamic colour must be stored as-is, not frozen")
+        XCTAssertNil(sut.backgroundImage(for: .normal))
+    }
+
+    func test_textOnly_restyle_preserves_existing_background_image() {
+        // Re-styling an image-backed button with a text-only ButtonStyle (typography update)
+        // must not wipe the existing background image.
+        let sut = UIButton(frame: CGRect(x: 0, y: 0, width: 0, height: 0))
         let explicitImage = UIImage.create(from: .blue)
-        sut.withStyle(ButtonStyle(textStyle: textStyle, backgroundImage: explicitImage))
+        sut.withStyle(ButtonStyle(textStyle: TextStyle(font: UIFont.systemFont(ofSize: 10)),
+                                  backgroundImage: explicitImage))
         XCTAssertEqual(sut.backgroundImage(for: .normal), explicitImage)
-        // No explicit .disabled image now, so UIKit falls back to the new .normal image —
-        // the stale color dim is gone (it would NOT equal the new image if it had leaked).
-        XCTAssertEqual(sut.backgroundImage(for: .disabled), explicitImage,
-                       "stale disabled dim must be cleared so the new style's image is used")
+
+        sut.withStyle(ButtonStyle(textStyle: TextStyle(font: UIFont.boldSystemFont(ofSize: 14))))
+        XCTAssertEqual(sut.backgroundImage(for: .normal), explicitImage,
+                       "text-only restyle must preserve the existing background image")
     }
 
     func test_dottedBorder_addsSingleOverlay_and_resetRemovesItOnly() {
