@@ -9,25 +9,19 @@ extension UIButton: Stylable {
         }
         
         if let viewStyle = style.viewStyle {
+            // `withViewStyle` assigns `backgroundColor` directly. Keeping the colour (rather
+            // than rendering it into a 1×1 image) lets dynamic colours re-resolve on
+            // light/dark trait changes — the same reason ViewStyle defaults to `.clear`.
             self.withViewStyle(viewStyle)
         }
-        
-        // Clear the per-state background images this method manages before re-applying,
-        // so a reused button does not keep stale images from a previous style (e.g. a
-        // color-based `.disabled` dim leaking under a later `backgroundImage` style).
-        setBackgroundImage(nil, for: .normal)
-        setBackgroundImage(nil, for: .disabled)
 
         if let image = style.backgroundImage {
             setBackgroundImage(image, for: .normal)
-        } else if let backgroundColor = style.viewStyle?.backgroundColor {
-            // `backgroundColor` is not state-aware: deriving the disabled dim from it
-            // (alpha 0.3) would stick after the button is re-enabled. Drive the appearance
-            // through per-state background images instead, so UIKit restores the enabled
-            // look automatically when `isEnabled` changes.
-            self.backgroundColor = nil
-            setBackgroundImage(UIImage.create(from: backgroundColor), for: .normal)
-            setBackgroundImage(UIImage.create(from: backgroundColor.withAlphaComponent(0.3)), for: .disabled)
         }
+        // No disabled-state background dimming: `backgroundColor` is not state-aware, so
+        // dimming it for the disabled state (the old alpha-0.3 path) stuck after the button
+        // was re-enabled (C027). A reused text-only restyle is also left untouched here, so
+        // an existing background image/colour is preserved. A proper state-aware disabled
+        // background would need an explicit colour on `ButtonStyle` rather than mutating this.
 	}
 }
