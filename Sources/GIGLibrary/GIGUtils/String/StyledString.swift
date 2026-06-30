@@ -41,45 +41,19 @@ public extension UILabel {
      .Color(UIColor.redColor())))
      ````
      */
-    var styledString: StyledString? {
-        
-        @available(*, deprecated, renamed: "styledString()")
-        get {
-            return nil
-        }
-        
-        set(newtStyle) {
-            self.attributedText = newtStyle?.toAttributedString(defaultFont: self.font)
-        }
-    }
-    
     func styledString(_ styledString: StyledString) {
         self.attributedText = styledString.toAttributedString(defaultFont: self.font)
     }
-    
+
     /**
      Set a HTML String to a Label
-     
+
      ````
      label.html("<b>Important</b> text")
      ````
      */
-    
-    var html: String? {
-        
-        @available(*, deprecated, renamed: "html()")
-        get {
-            return nil
-        }
-        
-        set(newtHtml) {
-            let string = newtHtml ?? ""
-            self.attributedText = NSAttributedString(fromHTML: string, font: self.font, color: self.textColor, aligment: self.textAlignment)
-        }
-    }
-    
     func html(_ html: String?) {
-        self.attributedText = NSAttributedString(fromHTML: html ?? "", font: self.font, color: self.textColor, aligment: self.textAlignment)
+        self.attributedText = NSAttributedString(fromHTML: html ?? "", font: self.font, color: self.textColor, alignment: self.textAlignment)
     }
 }
 
@@ -94,25 +68,6 @@ public extension UITextView {
      .Color(UIColor.redColor())))
      ````
      */
-    
-    var styledString: StyledString? {
-        
-        @available(*, deprecated, renamed: "styledString()")
-        get {
-            return nil
-        }
-        
-        set(newtStyle) {
-            
-            if let font = self.font {
-                self.attributedText = newtStyle?.toAttributedString(defaultFont: font)
-            } else {
-                let defaultFont = UIFont.systemFont(ofSize: UIFont.systemFontSize)
-                self.attributedText = newtStyle?.toAttributedString(defaultFont: defaultFont)
-            }
-        }
-    }
-    
     func styledString(_ styledString: StyledString) {
         if let font = self.font {
             self.attributedText = styledString.toAttributedString(defaultFont: font)
@@ -121,38 +76,14 @@ public extension UITextView {
             self.attributedText = styledString.toAttributedString(defaultFont: defaultFont)
         }
     }
-    
+
     /**
      Set a HTML String to a UITextView
-     
+
      ````
      textView.html("<b>Important</b> text")
      ````
      */
-    var html: String? {
-        
-        @available(*, deprecated, renamed: "html()")
-        get {
-            return nil
-        }
-        
-        set(newtHtml) {
-            let string = newtHtml ?? ""
-            var font = UIFont.systemFont(ofSize: UIFont.systemFontSize)
-            var textColor = UIColor.black
-            
-            if let currentFont = self.font {
-                font = currentFont
-            }
-            
-            if let currentTextColor = self.textColor {
-                textColor = currentTextColor
-            }
-            
-            self.attributedText = NSAttributedString(fromHTML: string, font: font, color: textColor, aligment: self.textAlignment)
-        }
-    }
-    
     func html(_ html: String?) {
         var font = UIFont.systemFont(ofSize: UIFont.systemFontSize)
         var textColor = UIColor.black
@@ -165,14 +96,17 @@ public extension UITextView {
             textColor = currentTextColor
         }
         
-        self.attributedText = NSAttributedString(fromHTML: html ?? "", font: font, color: textColor, aligment: self.textAlignment)
+        self.attributedText = NSAttributedString(fromHTML: html ?? "", font: font, color: textColor, alignment: self.textAlignment)
     }
 }
 
 public extension NSAttributedString {
-    
+
+    // HTML parsing spins up WebKit, which Apple restricts to the main thread,
+    // so these convenience initializers are isolated to @MainActor (C026).
+    @MainActor
     convenience init?(fromHTML html: String) {
-        
+
         let htmlData: Data
         if let data = html.data(using: String.Encoding.utf8) {
             htmlData = data
@@ -195,15 +129,17 @@ public extension NSAttributedString {
         }
     }
     
-    convenience init?(fromHTML html: String, font: UIFont, color: UIColor, aligment: NSTextAlignment = .left) {
-        self.init(fromHTML: NSAttributedString.createHtml(from: html, font: font, pointSize: font.pointSize, color: color, aligment: aligment))
+    @MainActor
+    convenience init?(fromHTML html: String, font: UIFont, color: UIColor, alignment: NSTextAlignment = .left) {
+        self.init(fromHTML: NSAttributedString.createHtml(from: html, font: font, pointSize: font.pointSize, color: color, alignment: alignment))
     }
-    
-    convenience init?(fromHTML html: String, pointSize: CGFloat, color: UIColor, aligment: NSTextAlignment = .left) {
-        self.init(fromHTML: NSAttributedString.createHtml(from: html, font: UIFont.systemFont(ofSize: UIFont.systemFontSize), pointSize: pointSize, color: color, aligment: aligment))
+
+    @MainActor
+    convenience init?(fromHTML html: String, pointSize: CGFloat, color: UIColor, alignment: NSTextAlignment = .left) {
+        self.init(fromHTML: NSAttributedString.createHtml(from: html, font: UIFont.systemFont(ofSize: UIFont.systemFontSize), pointSize: pointSize, color: color, alignment: alignment))
     }
-    
-    private class func createHtml(from string: String, font: UIFont, pointSize: CGFloat, color: UIColor, aligment: NSTextAlignment) -> String {
+
+    private class func createHtml(from string: String, font: UIFont, pointSize: CGFloat, color: UIColor, alignment: NSTextAlignment) -> String {
         let fontName = font.isSystemFont() ? "-apple-system" : font.fontName
         let htmlFontWeight = font.isSystemFont() ? "font-weight:\(font.htmlWeight());" : ""
         let style = "<style>body{color:\(color.hexString(false)); font-family: '\(fontName)'; font-size: \(String(format: "%.0f", pointSize))px;\(htmlFontWeight)}</style>"
@@ -212,7 +148,8 @@ public extension NSAttributedString {
 }
 
 extension Data {
-    var attributedString: NSAttributedString? {
+    // HTML parsing spins up WebKit, restricted to the main thread by Apple (C026).
+    @MainActor var attributedString: NSAttributedString? {
         do {
             return try NSAttributedString(
                 data: self,
@@ -252,25 +189,102 @@ public struct StyledString {
     // MARK: PRIVATE
     
     func attributedStringFrom(styledStringFraction: StyledStringFraction, font: UIFont) -> NSAttributedString {
-        
+
         let currentString = styledStringFraction.string
         let currentStyle = styledStringFraction.styles
-        
-        var currentFont = font
-        
+
         let tempAttributedString = NSMutableAttributedString(string: currentString)
-        return currentStyle.reduce(tempAttributedString) { (string, style) -> NSMutableAttributedString in
-            
-            let key = style.key()
-            let value = style.value(forFont: currentFont)
-            
-            string.addAttribute(NSAttributedString.Key(rawValue: key), value: value, range: NSRange(location: 0, length: string.length))
-            
-            if key == NSAttributedString.Key.font.rawValue {
-                currentFont = style.value(forFont: currentFont) as? UIFont ?? UIFont.systemFont(ofSize: 14)
+        let fullRange = NSRange(location: 0, length: tempAttributedString.length)
+
+        // Font-related styles are accumulated and resolved in a single step so the
+        // order of `.bold`/`.italic` vs `.size`/`.fontName` does not drop traits (C069).
+        var traits: UIFontDescriptor.SymbolicTraits = []
+        var sizeOverride: CGFloat?
+        var nameOverride: String?
+        var explicitFont: UIFont?
+        var hasFontStyle = false
+
+        for style in currentStyle {
+            switch style {
+            case .none:
+                // No attribute is emitted for `.none` so it does not pollute the range (C066).
+                continue
+            case .bold:
+                traits.insert(.traitBold)
+                hasFontStyle = true
+            case .italic:
+                traits.insert(.traitItalic)
+                hasFontStyle = true
+            case .size(let pointSize):
+                sizeOverride = pointSize
+                hasFontStyle = true
+            case .fontName(let name):
+                nameOverride = name
+                hasFontStyle = true
+            case .font(let explicit):
+                explicitFont = explicit
+                hasFontStyle = true
+            default:
+                tempAttributedString.addAttribute(
+                    NSAttributedString.Key(rawValue: style.key()),
+                    value: style.value(forFont: font),
+                    range: fullRange
+                )
             }
-            return string
         }
+
+        if hasFontStyle {
+            let resolvedFont = StyledString.resolveFont(
+                base: font,
+                explicit: explicitFont,
+                name: nameOverride,
+                size: sizeOverride,
+                traits: traits
+            )
+            tempAttributedString.addAttribute(.font, value: resolvedFont, range: fullRange)
+        }
+
+        return tempAttributedString
+    }
+
+    /// Builds the final `UIFont` from the accumulated font styles in a single pass.
+    ///
+    /// Traits are applied last, over the descriptor of the (already sized/named) font,
+    /// so changing the size never discards a previously requested bold/italic trait (C069).
+    private static func resolveFont(
+        base: UIFont,
+        explicit: UIFont?,
+        name: String?,
+        size: CGFloat?,
+        traits: UIFontDescriptor.SymbolicTraits
+    ) -> UIFont {
+
+        var font = explicit ?? base
+
+        // A `.fontName` only takes effect when no explicit font was provided.
+        if explicit == nil, let name {
+            let targetSize = size ?? font.pointSize
+            if let named = UIFont(name: name, size: targetSize) {
+                font = named
+            } else {
+                LogWarn("Could not find font with name: " + name)
+                font = UIFont.systemFont(ofSize: targetSize)
+            }
+        }
+
+        // Resize through the descriptor so existing traits survive (C069).
+        if let size {
+            font = UIFont(descriptor: font.fontDescriptor, size: size)
+        }
+
+        if !traits.isEmpty {
+            let combined = font.fontDescriptor.symbolicTraits.union(traits)
+            if let descriptor = font.fontDescriptor.withSymbolicTraits(combined) {
+                font = UIFont(descriptor: descriptor, size: font.pointSize)
+            }
+        }
+
+        return font
     }
 }
 
@@ -293,9 +307,9 @@ public enum Style {
     case link(URL)
     case baseLineOffset(CGFloat)
     case letterSpacing(CGFloat)
-    case centerAligment
-    case leftAligment
-    case rightAligment
+    case centerAlignment
+    case leftAlignment
+    case rightAlignment
     case lineSpacing(CGFloat)
     
     // swiftlint:disable:next cyclomatic_complexity
@@ -333,11 +347,11 @@ public enum Style {
             return NSAttributedString.Key.baselineOffset.rawValue
         case .letterSpacing:
             return NSAttributedString.Key.kern.rawValue
-        case .centerAligment:
+        case .centerAlignment:
             return NSAttributedString.Key.paragraphStyle.rawValue
-        case .leftAligment:
+        case .leftAlignment:
             return NSAttributedString.Key.paragraphStyle.rawValue
-        case .rightAligment:
+        case .rightAlignment:
             return NSAttributedString.Key.paragraphStyle.rawValue
         case .lineSpacing:
             return NSAttributedString.Key.paragraphStyle.rawValue
@@ -392,15 +406,15 @@ public enum Style {
             return offset as AnyObject
         case .letterSpacing(let spacing):
             return spacing as AnyObject
-        case .centerAligment:
+        case .centerAlignment:
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.alignment = .center
             return paragraphStyle
-        case .leftAligment:
+        case .leftAlignment:
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.alignment = .left
             return paragraphStyle
-        case .rightAligment:
+        case .rightAlignment:
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.alignment = .right
             return paragraphStyle
@@ -495,22 +509,6 @@ extension UIColor {
             return String(format: "#%02X%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255), Int(a * 255))
         }
         return String(format: "#%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
-    }
-}
-
-func aligmentString(fromAligment aligment: NSTextAlignment) -> String {
-    
-    switch aligment {
-    case .left:
-        return "left"
-    case .right:
-        return "right"
-    case .center:
-        return "center"
-    case .justified:
-        return "justified"
-    default:
-        return "left"
     }
 }
 

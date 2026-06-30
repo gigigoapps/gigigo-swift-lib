@@ -15,16 +15,27 @@ public extension String {
 		return string.data(using: .utf8).map { $0.base64EncodedString() }
 	}
     
-    /* From https://stackoverflow.com/a/43500088 */
-    func base64URLSafeDecode() -> String {
+    /// Converts a base64url-safe encoded string (RFC 4648 §5) into the standard
+    /// base64 alphabet, restoring `+`/`/` characters and the `=` padding.
+    ///
+    /// This does **not** decode the value: the result is still a base64 string,
+    /// ready to be passed to `Data(base64Encoded:)`.
+    ///
+    /// Adapted from https://stackoverflow.com/a/43500088
+    func base64URLSafeToStandard() -> String {
         var base64 = self.replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")
-        
+
         if !base64.count.isMultiple(of: 4) {
             base64.append(String(repeating: "=", count: 4 - base64.count % 4))
         }
-        
+
         return base64
+    }
+
+    @available(*, deprecated, renamed: "base64URLSafeToStandard()")
+    func base64URLSafeDecode() -> String {
+        self.base64URLSafeToStandard()
     }
 	
     func toBase64() -> String? {
