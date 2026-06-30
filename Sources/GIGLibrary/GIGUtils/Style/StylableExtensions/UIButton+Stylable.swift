@@ -17,11 +17,17 @@ extension UIButton: Stylable {
 
         if let image = style.backgroundImage {
             setBackgroundImage(image, for: .normal)
+        } else if let styled = self as? StyledButton {
+            // `StyledButton` tracks `isEnabled` and swaps between the two dynamic colours, so
+            // the disabled background is state-aware and re-resolves on trait changes. The
+            // enabled colour comes from `viewStyle.backgroundColor` (already applied above).
+            styled.setStatefulBackgroundColors(enabled: style.viewStyle?.backgroundColor,
+                                               disabled: style.disabledBackgroundColor)
         }
-        // No disabled-state background dimming: `backgroundColor` is not state-aware, so
-        // dimming it for the disabled state (the old alpha-0.3 path) stuck after the button
-        // was re-enabled (C027). A reused text-only restyle is also left untouched here, so
-        // an existing background image/colour is preserved. A proper state-aware disabled
-        // background would need an explicit colour on `ButtonStyle` rather than mutating this.
+        // For a plain `UIButton`, the enabled `backgroundColor` (set by `withViewStyle`) is the
+        // only background: `backgroundColor` is not state-aware, so a disabled dim would either
+        // stick after re-enabling (C027) or freeze a dynamic colour into an image. A text-only
+        // restyle leaves any existing background untouched. Use `StyledButton` for a state-aware
+        // disabled background via `ButtonStyle.disabledBackgroundColor`.
 	}
 }

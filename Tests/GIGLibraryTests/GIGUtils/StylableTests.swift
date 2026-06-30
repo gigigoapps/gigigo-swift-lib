@@ -148,6 +148,47 @@ class StylableTests: XCTestCase {
         XCTAssertNil(sut.backgroundImage(for: .normal))
     }
 
+    func test_StyledButton_disabledBackgroundColor_is_state_aware_and_dynamic() {
+        // C027 follow-up: StyledButton applies a state-aware disabled background by swapping
+        // backgroundColor on isEnabled changes. Colours are stored as dynamic UIColors (not
+        // frozen images), so they re-resolve on light/dark trait changes.
+        let sut = StyledButton(frame: CGRect(x: 0, y: 0, width: 0, height: 0))
+        let style = ButtonStyle(textStyle: TextStyle(font: UIFont.systemFont(ofSize: 10)),
+                                viewStyle: ViewStyle(backgroundColor: .systemBackground),
+                                disabledBackgroundColor: .systemGray)
+        sut.withStyle(style)
+
+        XCTAssertEqual(sut.backgroundColor, .systemBackground, "enabled uses the enabled dynamic colour")
+        XCTAssertNil(sut.backgroundImage(for: .normal), "no frozen image is used")
+
+        sut.isEnabled = false
+        XCTAssertEqual(sut.backgroundColor, .systemGray, "disabling swaps to the disabled dynamic colour")
+
+        sut.isEnabled = true
+        XCTAssertEqual(sut.backgroundColor, .systemBackground, "re-enabling restores the enabled colour — no stuck state")
+    }
+
+    func test_StyledButton_without_disabledColor_keeps_enabled_color_when_disabled() {
+        // When no disabledBackgroundColor is provided, the enabled colour is used for both
+        // states (no dimming), so the behaviour matches a plain styled button.
+        let sut = StyledButton(frame: CGRect(x: 0, y: 0, width: 0, height: 0))
+        sut.withStyle(ButtonStyle(textStyle: TextStyle(font: UIFont.systemFont(ofSize: 10)),
+                                  viewStyle: ViewStyle(backgroundColor: .red)))
+        sut.isEnabled = false
+        XCTAssertEqual(sut.backgroundColor, .red)
+    }
+
+    func test_plain_UIButton_ignores_disabledBackgroundColor() {
+        // A plain UIButton is not state-aware: disabledBackgroundColor is documented as
+        // StyledButton-only, so the background stays the enabled colour.
+        let sut = UIButton(frame: CGRect(x: 0, y: 0, width: 0, height: 0))
+        sut.isEnabled = false
+        sut.withStyle(ButtonStyle(textStyle: TextStyle(font: UIFont.systemFont(ofSize: 10)),
+                                  viewStyle: ViewStyle(backgroundColor: .red),
+                                  disabledBackgroundColor: .gray))
+        XCTAssertEqual(sut.backgroundColor, .red)
+    }
+
     func test_textOnly_restyle_preserves_existing_background_image() {
         // Re-styling an image-backed button with a text-only ButtonStyle (typography update)
         // must not wipe the existing background image.
