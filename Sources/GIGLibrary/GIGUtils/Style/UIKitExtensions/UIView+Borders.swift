@@ -9,6 +9,40 @@ public enum Border: Int {
 
 private final class BorderView: UIView { }
 
+/// Draws a dashed border that tracks the host view's bounds and corner radius.
+///
+/// Implemented as a pinned subview (instead of a bare `CAShapeLayer` on the host's
+/// layer) so the path is recomputed in `layoutSubviews` — staying correct across
+/// rotation and resize rather than being captured pre-layout. Isolating the dashed
+/// border in its own view also lets `resetBorders()` remove only this overlay,
+/// without touching unrelated `CAShapeLayer`s added by callers.
+private final class DottedBorderView: UIView {
+    private let shapeLayer = CAShapeLayer()
+
+    init(weight: CGFloat, color: UIColor) {
+        super.init(frame: .zero)
+        self.isUserInteractionEnabled = false
+        self.backgroundColor = .clear
+        shapeLayer.fillColor = UIColor.clear.cgColor
+        shapeLayer.strokeColor = color.cgColor
+        shapeLayer.lineWidth = weight
+        shapeLayer.lineDashPattern = [4, 2]
+        self.layer.addSublayer(shapeLayer)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Inherit the host's corner radius; it may be set after the border is attached.
+        let radius = superview?.layer.cornerRadius ?? 0
+        shapeLayer.frame = bounds
+        shapeLayer.cornerRadius = radius
+        shapeLayer.path = UIBezierPath(roundedRect: bounds, cornerRadius: radius).cgPath
+    }
+}
+
 public extension UIView {
     
     func addSomeBorders(_ border: Border, weight: CGFloat, color: UIColor) {
@@ -55,14 +89,15 @@ public extension UIView {
     }
 	
     func addDottedBorder(weight: CGFloat, color: UIColor) {
-        let border = CAShapeLayer()
-        border.cornerRadius = self.layer.cornerRadius
-        border.strokeColor = color.cgColor
-        border.fillColor = UIColor.clear.cgColor
-        border.lineDashPattern = [4, 2]
-		border.lineWidth = weight
-        border.path = UIBezierPath(roundedRect: self.bounds, cornerRadius: self.layer.cornerRadius).cgPath
-        self.layer.addSublayer(border)
+        let borderView = DottedBorderView(weight: weight, color: color)
+        borderView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(borderView)
+        NSLayoutConstraint.activate([
+            borderView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            borderView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            borderView.topAnchor.constraint(equalTo: topAnchor),
+            borderView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
     }
 	
 	func resetBorder(_ border: Border) {
@@ -70,18 +105,8 @@ public extension UIView {
 	}
 	
 	func resetBorders() {
-		// Remove all previous BorderView subviews (solid borders)
-		self.subviews.filter { $0 is BorderView }.forEach { $0.removeFromSuperview() }
-		// Remove all CAShapeLayer sublayers from layer (dotted borders)
-		self.layer.sublayers?.filter({ $0 is CAShapeLayer }).forEach({ $0.removeFromSuperlayer() })
+		// Remove the border overlays we added: solid `BorderView`s and the dashed
+		// `DottedBorderView`. Unrelated subviews and layers are left untouched.
+		self.subviews.filter { $0 is BorderView || $0 is DottedBorderView }.forEach { $0.removeFromSuperview() }
     }
-
-	func roundCorners(corners: UIRectCorner, radius: CGFloat) {
-		let path = UIBezierPath(roundedRect: self.bounds, byRoundingCorners: corners, cornerRadii: CGSize(width: radius, height: radius))
-		let mask = CAShapeLayer()
-		let rect = self.bounds
-		mask.frame = rect
-		mask.path = path.cgPath
-		self.layer.mask = mask
-	}
 }

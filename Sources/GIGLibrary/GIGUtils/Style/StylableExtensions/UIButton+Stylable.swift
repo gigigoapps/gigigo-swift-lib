@@ -14,11 +14,14 @@ extension UIButton: Stylable {
         
         if let image = style.backgroundImage {
             setBackgroundImage(image, for: .normal)
-        } else {
-            self.backgroundColor = style.viewStyle?.backgroundColor
-            if !isEnabled {
-                self.backgroundColor = self.backgroundColor?.withAlphaComponent(0.3)
-            }
+        } else if let backgroundColor = style.viewStyle?.backgroundColor {
+            // `backgroundColor` is not state-aware: deriving the disabled dim from it
+            // (alpha 0.3) would stick after the button is re-enabled. Drive the appearance
+            // through per-state background images instead, so UIKit restores the enabled
+            // look automatically when `isEnabled` changes.
+            self.backgroundColor = nil
+            setBackgroundImage(UIImage.create(from: backgroundColor), for: .normal)
+            setBackgroundImage(UIImage.create(from: backgroundColor.withAlphaComponent(0.3)), for: .disabled)
         }
 	}
 }
