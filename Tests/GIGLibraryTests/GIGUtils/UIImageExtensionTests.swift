@@ -3,11 +3,11 @@ import UIKit
 @testable import GIGLibrary
 
 @MainActor
-// Serialized: `loadGifNameMissingPreservesImage` installs the global `UIImageView`
-// `didFinishLocalGifDecodeForTesting` seam and consumes it via a `CheckedContinuation`. Parallel
-// tests touching that shared static could resume the continuation twice (a trap), so the suite runs
-// serially — same rationale as `ImageDownloaderTests`.
-@Suite("UIImage+Extension", .serialized)
+// Every test here is pure size math on locally-built images — none touch `ImageDownloader`'s
+// shared static state or the `UIImageView.didFinishLocalGifDecodeForTesting` seam. The `loadGif`
+// tests that DO touch that shared state live in `ImageDownloaderTests` (a `.serialized` suite), so
+// this suite needs no serialization and cannot race another suite over global state.
+@Suite("UIImage+Extension")
 struct UIImageExtensionTests {
 
     // MARK: - imageProportionally guards
@@ -121,61 +121,7 @@ struct UIImageExtensionTests {
         #expect(UIImage.aspectFillSize(for: source, fitting: target) == nil)
     }
 
-    // MARK: - loadGif(name:) failure handling
-
-    @Test("Given loadGif(name:) with a missing resource, when the decode fails, then the existing image is preserved")
-    func loadGifNameMissingPreservesImage() async {
-        let view = UIImageView()
-        let existing = makeImage(size: CGSize(width: 4, height: 4))
-        view.image = existing
-
-        // Await the real decode-completion signal instead of sleeping, so the assertion runs AFTER
-        // the (nil) decode was handled — proving the image was preserved because the failed decode
-        // was skipped, not merely because the background task had not run yet. Installing the hook
-        // before `loadGif` is safe: this is `@MainActor`, so the load's `@MainActor` task cannot run
-        // until we suspend at the continuation below.
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            UIImageView.didFinishLocalGifDecodeForTesting = {
-                UIImageView.didFinishLocalGifDecodeForTesting = nil
-                continuation.resume()
-            }
-            view.loadGif(name: "___missing_resource_that_does_not_exist___")
-        }
-
-        // A failed decode must not blank the view (C050): the previous image stays untouched.
-        #expect(view.image === existing)
-    }
-
-    // MARK: - loadGif(urlString:) local file handling
-
-    @Test("Given loadGif(urlString:) with a local file:// URL, when the file has valid GIF data, then it decodes locally without going through ImageDownloader")
-    func loadGifURLStringLocalFileDecodesWithoutImageDownloader() async throws {
-        ImageDownloader.resetForTesting()
-        let gifData = try #require(Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"))
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".gif")
-        try gifData.write(to: tempURL)
-        defer { try? FileManager.default.removeItem(at: tempURL) }
-
-        let view = makeImageView()
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            UIImageView.didFinishLocalGifDecodeForTesting = {
-                UIImageView.didFinishLocalGifDecodeForTesting = nil
-                continuation.resume()
-            }
-            view.loadGif(urlString: tempURL.absoluteString)
-        }
-
-        // A `file://` URL must never touch ImageDownloader's network path (no reachability
-        // precheck, no queue entry) — otherwise a purely local read would fail offline (Codex P2).
-        #expect(ImageDownloader.queue[view] == nil)
-        #expect(view.image?.images != nil)
-    }
-
     // MARK: - Helpers
-
-    private func makeImageView() -> UIImageView {
-        return UIImageView(frame: CGRect(x: 0, y: 0, width: 10, height: 10))
-    }
 
     /// Builds a solid-colour image of an exact point size at scale 1, so `.size` assertions are
     /// deterministic and independent of the device screen scale.
