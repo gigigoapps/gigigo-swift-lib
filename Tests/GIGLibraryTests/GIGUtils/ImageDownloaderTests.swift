@@ -344,6 +344,100 @@ struct ImageDownloaderTests {
         #expect(drained)
     }
 
+    // MARK: - loadGif local decode (name: / local file://)
+
+    @Test("Given loadGif(name:) with a missing resource, when the decode fails, then the existing image is preserved")
+    func loadGifNameMissingPreservesImage() async {
+        ImageDownloader.resetForTesting()
+        let view = UIImageView()
+        let existing = makeImage(size: CGSize(width: 4, height: 4))
+        view.image = existing
+
+        // Await the real decode-completion signal instead of sleeping, so the assertion runs AFTER
+        // the (nil) decode was handled — proving the image was preserved because the failed decode
+        // was skipped, not merely because the background task had not run yet. Installing the hook
+        // before `loadGif` is safe: this is `@MainActor`, so the load's `@MainActor` task cannot run
+        // until we suspend at the continuation below.
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            UIImageView.didFinishLocalGifDecodeForTesting = {
+                UIImageView.didFinishLocalGifDecodeForTesting = nil
+                continuation.resume()
+            }
+            view.loadGif(name: "___missing_resource_that_does_not_exist___")
+        }
+
+        // A failed decode must not blank the view (C050): the previous image stays untouched.
+        #expect(view.image === existing)
+    }
+
+    @Test("Given loadGif(urlString:) with a local file:// URL, when the file has valid GIF data, then it decodes locally without going through ImageDownloader")
+    func loadGifURLStringLocalFileDecodesWithoutImageDownloader() async throws {
+        ImageDownloader.resetForTesting()
+        let gifData = try #require(Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"))
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".gif")
+        try gifData.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let view = makeImageView()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            UIImageView.didFinishLocalGifDecodeForTesting = {
+                UIImageView.didFinishLocalGifDecodeForTesting = nil
+                continuation.resume()
+            }
+            view.loadGif(urlString: tempURL.absoluteString)
+        }
+
+        // A `file://` URL must never touch ImageDownloader's network path (no reachability
+        // precheck, no queue entry) — otherwise a purely local read would fail offline (Codex P2).
+        #expect(ImageDownloader.queue[view] == nil)
+        #expect(view.image?.images != nil)
+    }
+
+    @Test("Given a view mid-local-GIF-decode, when reused for image(from:), then the stale local decode does not paint over image(from:)")
+    func imageFromInvalidatesPendingLocalGifDecode() async throws {
+        ImageDownloader.resetForTesting()
+        useFailFastRequests()
+
+        // A real local GIF so the local decode actually produces an image and WOULD paint if it were
+        // still considered current — a nil decode could otherwise mask the bug. The `file://` branch
+        // of `loadGif(urlString:)` shares the exact `gifLoadGeneration` guard as `loadGif(name:)`
+        // (both go through `loadGifLocally`), and unlike a bundled resource it can be decoded from
+        // the test bundle, so it faithfully exercises the `name:` → `image(from:)` reuse scenario.
+        let gifData = try #require(Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"))
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".gif")
+        try gifData.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        // A non-animated marker so the assertion can tell image(from:)'s result apart from the GIF.
+        let placeholder = makeImage(.blue)
+
+        let view = makeImageView()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            UIImageView.didFinishLocalGifDecodeForTesting = {
+                UIImageView.didFinishLocalGifDecodeForTesting = nil
+                continuation.resume()
+            }
+            // Simulates a reused cell mixing the GIF and remote-image APIs:
+            // 1. Start a local GIF decode (captures the current generation).
+            view.loadGif(urlString: tempURL.absoluteString)
+            // 2. Reuse the same view for image(from:). These two calls run synchronously with no
+            //    suspension point before the await below, so the local decode's `@MainActor` task
+            //    cannot interleave — image(from:)'s (synchronous) generation bump is guaranteed to
+            //    land first. The fail-fast request never paints, so `placeholder` is the last thing
+            //    image(from:) writes to the view.
+            view.image(from: "https://example.com/reused-then-remote.png", placeholder: placeholder)
+        }
+
+        // With the generation bump now in image(from:), the local decode is stale by the time it
+        // resolves and must NOT overwrite image(from:)'s result: the marker placeholder stays and
+        // the view is never left showing the animated GIF.
+        #expect(view.image === placeholder)
+        #expect(view.image?.images == nil)
+
+        let drained = await waitUntil { ImageDownloader.activeDownloads == 0 }
+        #expect(drained)
+    }
+
     // MARK: - Cache hit
 
     @Test("Given a cached URL, when requested, then no download starts and the cached image is assigned")
@@ -384,6 +478,18 @@ struct ImageDownloaderTests {
 
     private func makeImage(_ color: UIColor) -> UIImage {
         return UIImage.create(from: color) ?? UIImage()
+    }
+
+    /// Builds a solid-colour, non-animated image of an exact point size at scale 1, so `.size`
+    /// assertions are deterministic and `.images == nil` distinguishes it from a decoded GIF.
+    private func makeImage(size: CGSize, color: UIColor = .red) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { context in
+            color.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+        }
     }
 
     private func makePNGData() -> Data {

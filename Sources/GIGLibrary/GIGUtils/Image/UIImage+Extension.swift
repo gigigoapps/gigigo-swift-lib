@@ -10,8 +10,13 @@ import UIKit
 import ImageIO
 
 public extension UIImageView {
-    
+
     func image(from urlString: String, placeholder: UIImage?) {
+        // Bumping the generation invalidates any pending local GIF decode (`loadGif(name:)` or a
+        // local-file `loadGif(urlString:)`) for this (possibly reused) view, so a decode captured
+        // before this call cannot paint over the image loaded here if it resolves afterward — the
+        // same last-request-wins guard the remote branch of `loadGif(urlString:)` already applies.
+        _ = self.beginGifLoad()
         ImageDownloader.shared.download(url: urlString, for: self, placeholder: placeholder)
     }
     
