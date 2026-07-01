@@ -118,7 +118,8 @@ public class Response: Selfie, @unchecked Sendable {
     /// `.gif` body can carry many/large frames and is network-controlled, so the (potentially heavy)
     /// decode must run off the main actor — `ImageDownloader` reads the scale on the main actor and
     /// then calls this from a detached task. GIFs decode as animated images; everything else as a
-    /// single frame at `scale`.
+    /// single frame at `scale`. A GIF is recognised by the response URL's `.gif` extension OR the
+    /// body's `GIF8` signature, so a GIF served from a URL without a `.gif` path still animates.
     func image(scale: CGFloat) throws -> UIImage {
 		guard let imageData = self.body else {
 			throw ResponseError.bodyNil
@@ -127,7 +128,9 @@ public class Response: Selfie, @unchecked Sendable {
         // GIFs need the animated decoder: `UIImage(data:)` only yields the first frame, and the
         // previous code rejected them outright — so a managed download (e.g. `ImageDownloader`)
         // spent a network slot only to discard the result silently. Decode them properly here.
-        if self.isGifURL() {
+        // Detect GIFs by the URL extension OR the raw bytes' signature: a GIF served from a URL
+        // without a `.gif` path (e.g. a CDN endpoint) would otherwise be flattened to a single frame.
+        if self.isGifURL() || Response.dataHasGIFHeader(imageData) {
             guard let image = UIImage.gif(data: imageData) else {
                 throw ResponseError.unexpectedDataType
             }
@@ -178,6 +181,20 @@ public class Response: Selfie, @unchecked Sendable {
             return false
         }
         return url.pathExtension.caseInsensitiveCompare("gif") == .orderedSame
+    }
+
+    /// True when the raw bytes begin with a GIF signature (`GIF87a`/`GIF89a`, both sharing the
+    /// `GIF8` prefix). Used alongside the URL extension so a GIF whose URL has no `.gif` path is
+    /// still decoded as animated rather than flattened to a single frame. No other common image
+    /// format starts with these bytes, so PNG/JPEG bodies fall through to the single-frame decode.
+    /// Indexed from `startIndex` so it is correct even when `data` is a slice.
+    private static func dataHasGIFHeader(_ data: Data) -> Bool {
+        guard data.count >= 4 else { return false }
+        let start = data.startIndex
+        return data[start] == 0x47      // G
+            && data[start + 1] == 0x49  // I
+            && data[start + 2] == 0x46  // F
+            && data[start + 3] == 0x38  // 8
     }
 
     private func shouldParseJSON(headers: [AnyHashable: Any]?, body: Data?) -> Bool {

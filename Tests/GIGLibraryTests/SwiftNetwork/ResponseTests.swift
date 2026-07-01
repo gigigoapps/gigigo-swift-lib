@@ -245,6 +245,21 @@ struct ResponseTests {
         #expect(image.size.height > 0)
     }
 
+    @Test("Given valid GIF data at a URL without a .gif extension, when image is requested, then it still decodes as animated")
+    func imageDecodesGifDataFromExtensionlessURL() throws {
+        // Given a minimal 1x1 GIF89a served from a CDN-style URL with no `.gif` path
+        let gifData = try #require(Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"))
+        let url = try #require(URL(string: "https://cdn.example.com/media?id=123"))
+        let response = makeImageResponse(body: gifData, url: url)
+
+        // When
+        let image = try response.image(scale: 1)
+
+        // Then the `GIF8` byte signature routes it through the animated decoder despite the URL
+        // extension not being `.gif`, instead of flattening it to a single frame.
+        #expect(image.images != nil)
+    }
+
     @Test("Given HTTP status codes around the 2xx boundary, when Response parses, then only 200..<300 are success")
     func responseTreatsOnly2xxAsSuccess() throws {
         // Given

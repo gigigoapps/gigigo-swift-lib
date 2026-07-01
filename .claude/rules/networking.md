@@ -157,7 +157,7 @@ In tests: inject `NetworkLogManagerSpy` via the designated `init` to capture log
 - `fetch()` **never throws** — always check `Response.status` before using `Response.data`
 - `fetchDecodable` and `fetchVoid` **do** throw — wrap in `do/catch`
 - `Response.image(scale:)` is `nonisolated` and takes the screen scale explicitly — decode GIFs off the main actor (read `UIScreen.main.scale` on main, then call from a background task) so a large/multi-frame network GIF can't block the UI
-- `Response.image(scale:)` decodes `.gif` URLs as animated images (via `UIImage.gif(data:)`); other URLs decode as a single `UIImage` at `scale`
+- `Response.image(scale:)` decodes GIFs as animated images (via `UIImage.gif(data:)`) when the URL ends in `.gif` **or** the body starts with the `GIF8` signature; everything else decodes as a single `UIImage` at `scale`
 - `.gigigo` standard type marks the response as failed on `{ "status": false }` even with HTTP 200 — intentional
 - `fetch()` silently returns a `.noInternet` response if reachability check fails — no exception is raised
 - Only HTTP `200..<300` is `.success`; `300`+ map to an error status
