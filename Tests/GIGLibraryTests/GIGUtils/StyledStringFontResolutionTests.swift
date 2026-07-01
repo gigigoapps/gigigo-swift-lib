@@ -55,4 +55,19 @@ struct StyledStringFontResolutionTests {
         #expect(resolved.fontDescriptor.symbolicTraits.contains(.traitBold))
         #expect(resolved.fontDescriptor.symbolicTraits.contains(.traitItalic))
     }
+
+    @Test("Given .size then a later .font, when styled, then the explicit font's own size wins (source order)")
+    func explicitFontAfterSizeUsesItsOwnSize() throws {
+        let custom = try #require(UIFont(name: "ChalkboardSE-Light", size: 25))
+        let resolved = try #require(font(for: "texto".style(.size(12), .font(custom)), text: "texto"))
+        #expect(resolved.fontName == custom.fontName)
+        #expect(resolved.pointSize == 25)
+    }
+
+    @Test("Given .font then a later .fontName, when styled, then the later named font wins (source order)")
+    func fontNameAfterExplicitFontWins() throws {
+        let custom = try #require(UIFont(name: "ChalkboardSE-Light", size: 25))
+        let resolved = try #require(font(for: "texto".style(.font(custom), .fontName("ArialMT")), text: "texto"))
+        #expect(resolved.fontName == "ArialMT")
+    }
 }
