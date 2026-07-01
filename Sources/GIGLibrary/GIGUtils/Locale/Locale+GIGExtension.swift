@@ -17,8 +17,11 @@ public extension Locale {
 	}
 
 	/// Returns only the language code of the current locale. Example: `es`
+	///
+	/// Derived from `currentLanguage()` (the preferred language tag) so it stays consistent with it:
+	/// an app forced to Spanish on an `en_US` device reports `es`, not the device region's language.
 	static func currentLanguageCode() -> String {
-		return Locale.current.language.languageCode?.identifier ?? "en"
+		return Locale.languageCode(from: currentLanguage()) ?? "en"
 	}
 
 	/// Returns only the region code of the current locale. Example: `US`

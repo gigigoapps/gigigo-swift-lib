@@ -24,7 +24,7 @@ Cases:
 - Author: Alejandro Jiménez
 - Since: 1.1.3
 */
-public enum ErrorDate: Error {
+public enum ErrorDate: Error, Equatable {
 	case invalidHour
 	case invalidMinutes
 	case invalidSeconds
@@ -36,14 +36,17 @@ public enum ErrorDate: Error {
 ///
 /// Creating a `DateFormatter` is one of the most expensive Foundation operations, and these
 /// helpers are called in loops/per-row, so formatters are built once and reused. Each cached
-/// formatter is fully configured up front (locale, time zone, format) and only read afterwards;
-/// `DateFormatter` is thread-safe for concurrent reads, and the mutable cache itself is guarded
-/// by a lock.
+/// formatter is fully configured up front (locale, time zone, format) and never reconfigured
+/// afterwards; a `DateFormatter` in that state is safe to use from multiple threads (Apple only
+/// guarantees this while its configuration is not mutated), and the mutable cache itself is
+/// guarded by a lock.
 private final class DateFormatterCache: @unchecked Sendable {
 
 	static let shared = DateFormatterCache()
 
 	private let lock = NSLock()
+	// Assumes a bounded set of format strings (the usual case: format literals). A caller that
+	// generates unbounded distinct formats at runtime would grow this cache without limit.
 	private var formatters: [String: DateFormatter] = [:]
 
 	func formatter(for format: String) -> DateFormatter {
@@ -59,9 +62,9 @@ private final class DateFormatterCache: @unchecked Sendable {
 		formatter.locale = Locale(identifier: "en_US_POSIX")
 		// Fixed time zone so custom formats without a zone token behave deterministically
 		// regardless of the device time zone (ISO strings carry their own offset via `Z`).
+		// AM/PM symbols are left at their en_US_POSIX defaults so custom formats using the
+		// `a` token still parse and format correctly (the shared formatter serves both paths).
 		formatter.timeZone = TimeZone(secondsFromGMT: 0)
-		formatter.amSymbol = ""
-		formatter.pmSymbol = ""
 		formatters[format] = formatter
 		return formatter
 	}

@@ -66,7 +66,7 @@ struct UIColorExtensionTests {
     // MARK: - Invalid input
 
     @Test("Given a string with non-hex characters, the initializer returns nil",
-          arguments: ["#GG0000", "#12", "12345", "#FF00GG", ""])
+          arguments: ["#GG0000", "#12", "12345", "#FF00GG", "", "#0xFFFF", "0xFF00FF", "+F0000"])
     func invalidReturnsNil(hex: String) {
         #expect(UIColor(hex: hex) == nil)
     }

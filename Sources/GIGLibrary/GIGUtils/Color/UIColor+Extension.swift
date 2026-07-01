@@ -27,9 +27,9 @@ extension UIColor {
         let length = normalized.count
         guard length == 3 || length == 6 || length == 8 else { return nil }
 
-        let scanner = Scanner(string: normalized)
-        var value: UInt64 = 0
-        guard scanner.scanHexInt64(&value), scanner.isAtEnd else { return nil }
+        // Validate hex digits explicitly: `UInt64(_:radix:)` rejects any `0x`/sign prefix that
+        // `Scanner.scanHexInt64` would otherwise swallow (e.g. `#0xFFFF`).
+        guard normalized.allSatisfy(\.isHexDigit), let value = UInt64(normalized, radix: 16) else { return nil }
 
         let r: CGFloat
         let g: CGFloat
