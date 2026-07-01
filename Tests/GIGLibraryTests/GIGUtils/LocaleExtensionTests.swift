@@ -53,6 +53,13 @@ struct LocaleExtensionTests {
         #expect(!Locale.currentRegionCode().isEmpty)
     }
 
+    @Test("Given the current locale, currentLanguageCode stays consistent with currentLanguage")
+    func currentLanguageCodeMatchesPreferredLanguage() {
+        // The language code must be derived from the preferred language tag, not the device region,
+        // so an app forced to a language different from the region still reports that language.
+        #expect(Locale.currentLanguageCode() == (Locale.languageCode(from: Locale.currentLanguage()) ?? "en"))
+    }
+
     @Test("Given the current locale, currentLanguage returns a non-empty tag")
     func currentLanguageIsNotEmpty() {
         #expect(!Locale.currentLanguage().isEmpty)
