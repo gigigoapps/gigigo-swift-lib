@@ -97,7 +97,13 @@ struct ImageDownloader {
 
     // MARK: - Public methods
 
-    func download(url: String, for view: UIImageView, placeholder: UIImage?) {
+    /// Cancels and forgets any in-flight or still-queued download for `view`, without starting a new
+    /// one. Used by `UIImageView.loadGif(name:)` and the local-file branch of `loadGif(urlString:)`
+    /// so that switching a (possibly reused) view to a local GIF decode invalidates a still-pending
+    /// remote download for the same view — otherwise the older remote download could complete
+    /// afterward and paint over the newer local result, breaking the last-request-wins guarantee
+    /// across the `loadGif` APIs.
+    func cancelPendingDownload(for view: UIImageView) {
         if let pending = ImageDownloader.queue[view] {
             pending.request.cancel()
             ImageDownloader.queue.removeValue(forKey: view)
@@ -105,6 +111,10 @@ struct ImageDownloader {
             // `fetch()` will unwind through `handleResponse` and release the slot there; if it
             // was still pending in `stack`, it was never counted and `pump()` skips its entry.
         }
+    }
+
+    func download(url: String, for view: UIImageView, placeholder: UIImage?) {
+        self.cancelPendingDownload(for: view)
         if let image = ImageDownloader.images.object(forKey: url as NSString) {
             view.image = image
         } else {

@@ -4,9 +4,9 @@ import UIKit
 
 @MainActor
 // Serialized: `loadGifNameMissingPreservesImage` installs the global `UIImageView`
-// `didFinishLoadGifNameForTesting` seam and consumes it via a `CheckedContinuation`. Parallel tests
-// touching that shared static could resume the continuation twice (a trap), so the suite runs serially
-// — same rationale as `ImageDownloaderTests`.
+// `didFinishLocalGifDecodeForTesting` seam and consumes it via a `CheckedContinuation`. Parallel
+// tests touching that shared static could resume the continuation twice (a trap), so the suite runs
+// serially — same rationale as `ImageDownloaderTests`.
 @Suite("UIImage+Extension", .serialized)
 struct UIImageExtensionTests {
 
@@ -135,8 +135,8 @@ struct UIImageExtensionTests {
         // before `loadGif` is safe: this is `@MainActor`, so the load's `@MainActor` task cannot run
         // until we suspend at the continuation below.
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            UIImageView.didFinishLoadGifNameForTesting = {
-                UIImageView.didFinishLoadGifNameForTesting = nil
+            UIImageView.didFinishLocalGifDecodeForTesting = {
+                UIImageView.didFinishLocalGifDecodeForTesting = nil
                 continuation.resume()
             }
             view.loadGif(name: "___missing_resource_that_does_not_exist___")
@@ -146,7 +146,36 @@ struct UIImageExtensionTests {
         #expect(view.image === existing)
     }
 
+    // MARK: - loadGif(urlString:) local file handling
+
+    @Test("Given loadGif(urlString:) with a local file:// URL, when the file has valid GIF data, then it decodes locally without going through ImageDownloader")
+    func loadGifURLStringLocalFileDecodesWithoutImageDownloader() async throws {
+        ImageDownloader.resetForTesting()
+        let gifData = try #require(Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"))
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".gif")
+        try gifData.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let view = makeImageView()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            UIImageView.didFinishLocalGifDecodeForTesting = {
+                UIImageView.didFinishLocalGifDecodeForTesting = nil
+                continuation.resume()
+            }
+            view.loadGif(urlString: tempURL.absoluteString)
+        }
+
+        // A `file://` URL must never touch ImageDownloader's network path (no reachability
+        // precheck, no queue entry) — otherwise a purely local read would fail offline (Codex P2).
+        #expect(ImageDownloader.queue[view] == nil)
+        #expect(view.image?.images != nil)
+    }
+
     // MARK: - Helpers
+
+    private func makeImageView() -> UIImageView {
+        return UIImageView(frame: CGRect(x: 0, y: 0, width: 10, height: 10))
+    }
 
     /// Builds a solid-colour image of an exact point size at scale 1, so `.size` assertions are
     /// deterministic and independent of the device screen scale.
