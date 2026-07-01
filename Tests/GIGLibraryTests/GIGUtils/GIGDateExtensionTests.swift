@@ -96,20 +96,20 @@ class GIGDateExtensionTests: XCTestCase {
 	
 	func test_returns14PM_whenSetting14PM() {
 		let date = self.alejandroBirthday()
-		
+
 		let resultDate = try! date.setHour(14)
-		let expectedDate = Date.dateFromString("1985-01-24T14:00:00", format: "yyyy-MM-dd'T'HH:mm:ss")!
-		
-		XCTAssert(resultDate == expectedDate, "result: \(resultDate) - expected: \(expectedDate)")
+
+		// setHour keeps the local day/month/year and sets the local time, so assert on the
+		// device-calendar components to stay independent of the runner's time zone.
+		assertLocalTime(of: resultDate, hour: 14, minutes: 0, seconds: 0)
 	}
-	
+
 	func test_returns14_03_10PM_whenSetting14_59_59PM() {
 		let date = self.alejandroBirthday()
-		
+
 		let resultDate = try! date.setHour(14, minutes: 59, seconds: 59)
-		let expectedDate = Date.dateFromString("1985-01-24T14:59:59", format: "yyyy-MM-dd'T'HH:mm:ss")!
-		
-		XCTAssert(resultDate == expectedDate, "result: \(resultDate) - expected: \(expectedDate)")
+
+		assertLocalTime(of: resultDate, hour: 14, minutes: 59, seconds: 59)
 	}
 	
 	func test_throwsError_whenSetting24PM() {
@@ -150,6 +150,17 @@ class GIGDateExtensionTests: XCTestCase {
 	
 	
 	// MARK: - Private Helpers
+	fileprivate func assertLocalTime(of date: Date, hour: Int, minutes: Int, seconds: Int, file: StaticString = #filePath, line: UInt = #line) {
+		let calendar = Calendar(identifier: Calendar.Identifier.gregorian)
+		let components = calendar.dateComponents([.day, .month, .year, .hour, .minute, .second], from: date)
+		XCTAssertEqual(components.day, 24, file: file, line: line)
+		XCTAssertEqual(components.month, 1, file: file, line: line)
+		XCTAssertEqual(components.year, 1985, file: file, line: line)
+		XCTAssertEqual(components.hour, hour, file: file, line: line)
+		XCTAssertEqual(components.minute, minutes, file: file, line: line)
+		XCTAssertEqual(components.second, seconds, file: file, line: line)
+	}
+
 	fileprivate func alejandroBirthday() -> Date {
 		var dateComponents = DateComponents()
 		dateComponents.day = 24
