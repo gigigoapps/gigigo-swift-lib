@@ -196,13 +196,11 @@ public struct StyledString {
         let tempAttributedString = NSMutableAttributedString(string: currentString)
         let fullRange = NSRange(location: 0, length: tempAttributedString.length)
 
-        // Font-related styles are accumulated and resolved in a single step so the
-        // order of `.bold`/`.italic` vs `.size`/`.fontName` does not drop traits (C069).
-        var traits: UIFontDescriptor.SymbolicTraits = []
-        var sizeOverride: CGFloat?
-        var nameOverride: String?
-        var explicitFont: UIFont?
-        var hasFontStyle = false
+        // Resolve font-related styles in source order, so a later `.font`/`.fontName`/`.size`
+        // overrides an earlier one exactly as the previous reducer did. The single change vs.
+        // that reducer is that `.size` resizes through the descriptor instead of rebuilding the
+        // font by name, so a bold/italic trait already applied is not dropped by a later size (C069).
+        var resolvedFont: UIFont?
 
         for style in currentStyle {
             switch style {
@@ -210,20 +208,22 @@ public struct StyledString {
                 // No attribute is emitted for `.none` so it does not pollute the range (C066).
                 continue
             case .bold:
-                traits.insert(.traitBold)
-                hasFontStyle = true
+                resolvedFont = StyledString.font(byInserting: .traitBold, into: resolvedFont ?? font)
             case .italic:
-                traits.insert(.traitItalic)
-                hasFontStyle = true
+                resolvedFont = StyledString.font(byInserting: .traitItalic, into: resolvedFont ?? font)
             case .size(let pointSize):
-                sizeOverride = pointSize
-                hasFontStyle = true
+                let base = resolvedFont ?? font
+                resolvedFont = UIFont(descriptor: base.fontDescriptor, size: pointSize)
             case .fontName(let name):
-                nameOverride = name
-                hasFontStyle = true
+                let base = resolvedFont ?? font
+                if let named = UIFont(name: name, size: base.pointSize) {
+                    resolvedFont = named
+                } else {
+                    LogWarn("Could not find font with name: " + name)
+                    resolvedFont = UIFont.systemFont(ofSize: base.pointSize)
+                }
             case .font(let explicit):
-                explicitFont = explicit
-                hasFontStyle = true
+                resolvedFont = explicit
             default:
                 tempAttributedString.addAttribute(
                     NSAttributedString.Key(rawValue: style.key()),
@@ -233,58 +233,21 @@ public struct StyledString {
             }
         }
 
-        if hasFontStyle {
-            let resolvedFont = StyledString.resolveFont(
-                base: font,
-                explicit: explicitFont,
-                name: nameOverride,
-                size: sizeOverride,
-                traits: traits
-            )
+        if let resolvedFont {
             tempAttributedString.addAttribute(.font, value: resolvedFont, range: fullRange)
         }
 
         return tempAttributedString
     }
 
-    /// Builds the final `UIFont` from the accumulated font styles in a single pass.
+    /// Returns `font` with `trait` added to its existing symbolic traits, preserving the size.
     ///
-    /// Traits are applied last, over the descriptor of the (already sized/named) font,
-    /// so changing the size never discards a previously requested bold/italic trait (C069).
-    private static func resolveFont(
-        base: UIFont,
-        explicit: UIFont?,
-        name: String?,
-        size: CGFloat?,
-        traits: UIFontDescriptor.SymbolicTraits
-    ) -> UIFont {
-
-        var font = explicit ?? base
-
-        // A `.fontName` only takes effect when no explicit font was provided.
-        if explicit == nil, let name {
-            let targetSize = size ?? font.pointSize
-            if let named = UIFont(name: name, size: targetSize) {
-                font = named
-            } else {
-                LogWarn("Could not find font with name: " + name)
-                font = UIFont.systemFont(ofSize: targetSize)
-            }
-        }
-
-        // Resize through the descriptor so existing traits survive (C069).
-        if let size {
-            font = UIFont(descriptor: font.fontDescriptor, size: size)
-        }
-
-        if !traits.isEmpty {
-            let combined = font.fontDescriptor.symbolicTraits.union(traits)
-            if let descriptor = font.fontDescriptor.withSymbolicTraits(combined) {
-                font = UIFont(descriptor: descriptor, size: font.pointSize)
-            }
-        }
-
-        return font
+    /// Uses `union` (not a plain `withSymbolicTraits`) so combining `.bold` and `.italic`
+    /// keeps both, and resizing later through the descriptor never discards them (C069).
+    private static func font(byInserting trait: UIFontDescriptor.SymbolicTraits, into font: UIFont) -> UIFont {
+        let combined = font.fontDescriptor.symbolicTraits.union(trait)
+        guard let descriptor = font.fontDescriptor.withSymbolicTraits(combined) else { return font }
+        return UIFont(descriptor: descriptor, size: font.pointSize)
     }
 }
 
