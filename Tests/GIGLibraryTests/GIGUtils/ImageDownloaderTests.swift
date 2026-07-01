@@ -292,6 +292,58 @@ struct ImageDownloaderTests {
         #expect(drained)
     }
 
+    // MARK: - loadGif cross-invalidation (mixed name:/urlString: usage on a reused view)
+
+    @Test("Given a view mid-remote-load, when it is reused for loadGif(name:), then the pending remote download is cancelled")
+    func loadGifNameCancelsPendingRemoteDownload() async {
+        ImageDownloader.resetForTesting()
+        useFailFastRequests()
+
+        let view = makeImageView()
+        view.loadGif(urlString: "https://example.com/reused-then-name.gif")
+        // Registered synchronously before any await, same reasoning as the routing test above.
+        #expect(ImageDownloader.queue[view] != nil)
+
+        // Reusing the view for a bundled GIF must cancel the still-pending remote download (Codex
+        // P2): otherwise it could complete afterward and paint over the bundled result.
+        view.loadGif(name: "___missing_resource_that_does_not_exist___")
+        #expect(ImageDownloader.queue[view] == nil)
+
+        let drained = await waitUntil { ImageDownloader.activeDownloads == 0 }
+        #expect(drained)
+    }
+
+    @Test("Given a view mid-local-decode, when reused for loadGif(urlString:) with a remote URL, then the remote result wins")
+    func loadGifURLStringRemoteInvalidatesPendingLocalDecode() async throws {
+        ImageDownloader.resetForTesting()
+        let remoteURL = "https://example.com/remote-after-local.gif"
+        ImageDownloader.fetchProvider = { _ in
+            makeImageResponse(body: makePNGData(), url: URL(fileURLWithPath: "/remote-after-local.png"))
+        }
+
+        // A real local GIF so the local decode would actually succeed if it were allowed to apply.
+        let gifData = try #require(Data(base64Encoded: "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"))
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".gif")
+        try gifData.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        // Simulates a reused cell: a local-file GIF load immediately superseded by a remote one.
+        let view = makeImageView()
+        view.loadGif(urlString: tempURL.absoluteString)
+        view.loadGif(urlString: remoteURL)
+
+        await awaitCache(of: remoteURL)
+
+        // The remote load must win (Codex P2): the local decode's generation was bumped stale
+        // before it could resolve, so it cannot overwrite the remote result even if it finishes late.
+        let cachedRemote = ImageDownloader.images.object(forKey: remoteURL as NSString)
+        #expect(cachedRemote != nil)
+        #expect(view.image === cachedRemote)
+
+        let drained = await waitUntil { ImageDownloader.activeDownloads == 0 }
+        #expect(drained)
+    }
+
     // MARK: - Cache hit
 
     @Test("Given a cached URL, when requested, then no download starts and the cached image is assigned")
