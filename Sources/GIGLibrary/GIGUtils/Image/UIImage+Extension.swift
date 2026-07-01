@@ -15,24 +15,73 @@ public extension UIImageView {
         ImageDownloader.shared.download(url: urlString, for: self, placeholder: placeholder)
     }
     
+    /// Loads a GIF bundled with the app by resource name, decoding it off the main actor.
+    ///
+    /// Decoding runs on a background executor so a large/multi-frame GIF cannot block the UI, and
+    /// the result is only applied if this call is still the most recent `loadGif(name:)` for the
+    /// view — a reused cell that fires two loads in a row shows the LAST one requested, not
+    /// whichever finishes decoding last (see `gifLoadGeneration`). A decode failure leaves the
+    /// current image untouched instead of blanking it.
     func loadGif(name: String) {
-        DispatchQueue.global().async {
-            let image = UIImage.gif(name: name)
-            DispatchQueue.main.async {
+        let generation = beginGifLoad()
+        // Unstructured Task: this is a synchronous UIKit entry point (not an async context), so the
+        // off-main `decodedGif` must be bridged here. The generation guard drops a stale result if
+        // the view is reused before the decode finishes.
+        Task { @MainActor in
+            let image = await UIImage.decodedGif(name: name)
+            if self.gifLoadGeneration == generation, let image {
                 self.image = image
             }
+            #if DEBUG
+            UIImageView.didFinishLoadGifNameForTesting?()
+            #endif
         }
     }
-    
+
+    /// Loads a remote GIF through `ImageDownloader`, reusing its managed download path: async and
+    /// cancellable network I/O (no synchronous `Data(contentsOf:)` on a background thread), a
+    /// bounded concurrency limit, an in-memory cache, and the view-identity guard that makes a
+    /// reused cell show the last URL requested. The current image is passed as the placeholder so a
+    /// failed load leaves it untouched rather than blanking the view.
+    ///
+    /// The response is decoded as an animated GIF when the URL ends in `.gif` or its bytes carry a
+    /// GIF signature (see `Response.image`), so a GIF served from an extensionless URL still animates.
     func loadGif(urlString: String) {
-        DispatchQueue.global().async {
-            let image = UIImage.gif(url: urlString)
-            DispatchQueue.main.async {
-                self.image = image
-            }
-        }
+        ImageDownloader.shared.download(url: urlString, for: self, placeholder: self.image)
     }
 }
+
+// MARK: - loadGif(name:) view identity
+
+private extension UIImageView {
+
+    /// Monotonic per-view counter identifying the most recent `loadGif(name:)` request, stored as an
+    /// associated object. Compared on completion so a stale decode (the view was reused) is dropped.
+    /// The 1-byte allocation is only ever used for its stable address as the association key and is
+    /// intentionally never freed — it lives for the process lifetime, like a `static` sentinel.
+    private static let gifLoadGenerationKey = UnsafeRawPointer(UnsafeMutableRawPointer.allocate(byteCount: 1, alignment: 1))
+
+    var gifLoadGeneration: Int {
+        (objc_getAssociatedObject(self, UIImageView.gifLoadGenerationKey) as? Int) ?? 0
+    }
+
+    /// Bumps the generation for this view and returns the new value, marking any in-flight
+    /// `loadGif(name:)` decode as stale.
+    func beginGifLoad() -> Int {
+        let next = gifLoadGeneration &+ 1
+        objc_setAssociatedObject(self, UIImageView.gifLoadGenerationKey, next, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        return next
+    }
+}
+
+#if DEBUG
+extension UIImageView {
+    /// DEBUG-only seam fired on the MainActor after a `loadGif(name:)` decode completes (whether or
+    /// not the image was applied), so tests can await the real completion instead of sleeping. `nil`
+    /// by default and absent from release builds. Mirrors `ImageDownloader.didCacheImageForTesting`.
+    static var didFinishLoadGifNameForTesting: (@MainActor () -> Void)?
+}
+#endif
 
 extension UIImage {
     
@@ -54,19 +103,26 @@ extension UIImage {
         return UIImage.animatedImageWithSource(source)
     }
     
+    /// Loads a GIF from a URL string by reading its bytes synchronously with `Data(contentsOf:)`.
+    ///
+    /// - Warning: For a **remote** URL this performs blocking network I/O with no timeout,
+    ///   cancellation, or concurrency limit — which the library forbids for downloads. Use
+    ///   `UIImageView.loadGif(urlString:)` (managed, async, cancellable) for remote GIFs, or
+    ///   `gif(data:)` once you already hold the bytes. Kept only for loading a local `file://` URL.
+    @available(*, deprecated, message: "For remote URLs use UIImageView.loadGif(urlString:) (async, cancellable); for bytes you already hold use gif(data:). This does blocking network I/O.")
     public class func gif(url: String) -> UIImage? {
         // Validate URL
         guard let bundleURL = URL(string: url) else {
             LogWarn("This image named \"\(url)\" does not exist")
             return nil
         }
-        
+
         // Validate data
         guard let imageData = try? Data(contentsOf: bundleURL) else {
             LogWarn("Cannot turn image named \"\(url)\" into NSData")
             return nil
         }
-        
+
         return gif(data: imageData)
     }
     
@@ -77,14 +133,23 @@ extension UIImage {
             LogWarn("This image named \"\(name)\" does not exist")
             return nil
         }
-        
+
         // Validate data
         guard let imageData = try? Data(contentsOf: bundleURL) else {
             LogWarn("Cannot turn image named \"\(name)\" into NSData")
             return nil
         }
-        
+
         return gif(data: imageData)
+    }
+
+    /// Decodes a bundled GIF by name off the main actor. `@concurrent` forces the (potentially heavy,
+    /// multi-frame) decode onto a background executor instead of the caller's actor, and the
+    /// `sending` result lets the freshly-created, non-`Sendable` `UIImage` cross back to the
+    /// `@MainActor` caller in `UIImageView.loadGif(name:)`.
+    @concurrent
+    static func decodedGif(name: String) async -> sending UIImage? {
+        UIImage.gif(name: name)
     }
     
     public func imageProportionally(with size: CGSize) -> UIImage? {

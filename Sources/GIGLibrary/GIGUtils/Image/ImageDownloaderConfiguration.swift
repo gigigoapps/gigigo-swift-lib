@@ -25,4 +25,18 @@ public enum ImageDownloaderConfiguration {
         get { ImageDownloader.maxConcurrentDownloads }
         set { ImageDownloader.maxConcurrentDownloads = newValue }
     }
+
+    /// Default upper bound on the number of images kept in the in-memory cache. Applied to the
+    /// `NSCache` when it is first created; `NSCache` still evicts earlier under memory pressure.
+    static let defaultMaxCachedImages = 100
+
+    /// Maximum number of images kept in the in-memory cache.
+    ///
+    /// Backed by `NSCache.countLimit`, which is **best-effort**: the cache may briefly exceed this
+    /// count before it evicts. A value of `0` means "no count limit" (eviction then happens only
+    /// under memory pressure). Defaults to `defaultMaxCachedImages`. Negative values are clamped to `0`.
+    public static var maxCachedImages: Int {
+        get { ImageDownloader.images.countLimit }
+        set { ImageDownloader.images.countLimit = max(0, newValue) }
+    }
 }

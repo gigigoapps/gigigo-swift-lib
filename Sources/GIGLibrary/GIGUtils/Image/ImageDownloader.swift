@@ -12,9 +12,28 @@ import UIKit
 struct ImageDownloader {
 
     static let shared = ImageDownloader()
-    static var queue: [UIImageView: Request] = [:]
+    static var queue: [UIImageView: PendingDownload] = [:]
     static var stack: [UIImageView] = []
-    static var images: [String: UIImage] = [:]
+
+    /// In-memory image cache. `NSCache` (instead of a plain dictionary) bounds the footprint
+    /// automatically: it evicts under memory pressure, honours `countLimit`, and is purged on
+    /// memory warnings — so it cannot grow without bound the way a dictionary did. Keyed by the
+    /// original request URL string captured from the caller (see `PendingDownload.url`), which is
+    /// the single source of truth for both lookup and store.
+    static let images: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = ImageDownloaderConfiguration.defaultMaxCachedImages
+        return cache
+    }()
+
+    /// A download in flight (or queued) for a view: the `Request` used to compare identity on
+    /// completion, plus the original `url` string captured from the caller. The `url` is the single
+    /// source of truth for the cache key — used unchanged for both lookup and store — so the key
+    /// cannot diverge if `Request` ever starts transforming its `baseURL`.
+    struct PendingDownload {
+        let request: Request
+        let url: String
+    }
 
     /// Number of downloads currently in flight: a `fetch()` has been started and has not yet
     /// reached a terminal handler. Views still waiting in `stack` are NOT counted.
@@ -39,10 +58,10 @@ struct ImageDownloader {
 
     /// Seam used only by DEBUG builds: fired on the MainActor immediately after a successful
     /// download's decode → resize step has written the image to `images`, carrying the cache key
-    /// (`request.baseURL`). It lets tests await that step deterministically instead of polling with
-    /// a timeout, so they cannot flake when the `.utility` resize task is scheduled late under CI
-    /// load — they wait for the real signal rather than racing a deadline. `nil` by default and
-    /// absent from release builds — see `handleResponse(_:view:request:)`.
+    /// (`PendingDownload.url`). It lets tests await that step deterministically instead of polling
+    /// with a timeout, so they cannot flake when the `.utility` resize task is scheduled late under
+    /// CI load — they wait for the real signal rather than racing a deadline. `nil` by default and
+    /// absent from release builds — see `handleResponse(_:view:request:url:)`.
     static var didCacheImageForTesting: (@MainActor (_ cacheKey: String) -> Void)?
     #endif
 
@@ -65,7 +84,7 @@ struct ImageDownloader {
     private init() {
         NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { _ in
             Task { @MainActor in
-                ImageDownloader.images = [:]
+                ImageDownloader.images.removeAllObjects()
                 ImageDownloader.stack = []
                 ImageDownloader.queue = [:]
                 // Intentionally do NOT reset `activeDownloads`: the in-flight fetches keep running
@@ -79,14 +98,14 @@ struct ImageDownloader {
     // MARK: - Public methods
 
     func download(url: String, for view: UIImageView, placeholder: UIImage?) {
-        if let request = ImageDownloader.queue[view] {
-            request.cancel()
+        if let pending = ImageDownloader.queue[view] {
+            pending.request.cancel()
             ImageDownloader.queue.removeValue(forKey: view)
             // Do NOT touch `activeDownloads` here. If the request was already in flight, its
             // `fetch()` will unwind through `handleResponse` and release the slot there; if it
             // was still pending in `stack`, it was never counted and `pump()` skips its entry.
         }
-        if let image = ImageDownloader.images[url] {
+        if let image = ImageDownloader.images.object(forKey: url as NSString) {
             view.image = image
         } else {
             view.image = placeholder
@@ -102,7 +121,7 @@ struct ImageDownloader {
         #else
         let request = Request(method: .get, baseUrl: url, endpoint: "", bodyParams: nil)
         #endif
-        ImageDownloader.queue[view] = request
+        ImageDownloader.queue[view] = PendingDownload(request: request, url: url)
         // Drop any stale pending entry for this view before re-enqueuing it, so a view that was
         // re-requested while still queued (e.g. a reused cell) is never started more than once.
         ImageDownloader.stack.removeAll { $0 === view }
@@ -123,7 +142,9 @@ struct ImageDownloader {
 
     /// The single place that increments `activeDownloads` and launches a fetch.
     private func startDownload(for view: UIImageView) {
-        guard let request = ImageDownloader.queue[view] else { return }
+        guard let pending = ImageDownloader.queue[view] else { return }
+        let request = pending.request
+        let url = pending.url
         ImageDownloader.activeDownloads += 1
         // Unstructured Task is required here: `fetch()` is `@concurrent` (it runs off the
         // MainActor) and must be bridged from this MainActor-isolated flow, which is driven by
@@ -134,7 +155,7 @@ struct ImageDownloader {
             // `fetch()` installs its in-flight canceller, so if this request is no longer the
             // current one for the view, release the slot here instead of letting a discarded
             // download occupy it (and hit the network) until it finishes.
-            guard ImageDownloader.queue[view] === request else {
+            guard ImageDownloader.queue[view]?.request === request else {
                 self.finishDownload()
                 return
             }
@@ -143,7 +164,7 @@ struct ImageDownloader {
             #else
             let response = await request.fetch()
             #endif
-            self.handleResponse(response, view: view, request: request)
+            self.handleResponse(response, view: view, request: request, url: url)
         }
     }
 
@@ -158,12 +179,12 @@ struct ImageDownloader {
     /// identity (not URL). A stale completion must never evict a newer request's entry for the same
     /// reused view — even when both target the same URL.
     private func clearQueueEntry(for view: UIImageView, ifCurrent request: Request) {
-        if ImageDownloader.queue[view] === request {
+        if ImageDownloader.queue[view]?.request === request {
             ImageDownloader.queue.removeValue(forKey: view)
         }
     }
 
-    private func handleResponse(_ response: Response, view: UIImageView, request: Request) {
+    private func handleResponse(_ response: Response, view: UIImageView, request: Request, url: String) {
         switch response.status {
         case .success:
             // Read the scale and target size on the main actor (UIKit), then release the download
@@ -195,12 +216,12 @@ struct ImageDownloader {
                     // view was reused, even for the same URL) never paints over the newer request,
                     // and a completion whose entry was purged by a memory warning does NOT refill
                     // the cache the app was trying to free.
-                    guard ImageDownloader.queue[view] === request else { return }
+                    guard ImageDownloader.queue[view]?.request === request else { return }
                     self.setAnimated(image: finalImage, in: view)
-                    ImageDownloader.images[request.baseURL] = finalImage
+                    ImageDownloader.images.setObject(finalImage, forKey: url as NSString)
                     ImageDownloader.queue.removeValue(forKey: view)
                     #if DEBUG
-                    ImageDownloader.didCacheImageForTesting?(request.baseURL)
+                    ImageDownloader.didCacheImageForTesting?(url)
                     #endif
                 }
             }

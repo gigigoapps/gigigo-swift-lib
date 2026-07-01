@@ -3,7 +3,11 @@ import UIKit
 @testable import GIGLibrary
 
 @MainActor
-@Suite("UIImage+Extension")
+// Serialized: `loadGifNameMissingPreservesImage` installs the global `UIImageView`
+// `didFinishLoadGifNameForTesting` seam and consumes it via a `CheckedContinuation`. Parallel tests
+// touching that shared static could resume the continuation twice (a trap), so the suite runs serially
+// — same rationale as `ImageDownloaderTests`.
+@Suite("UIImage+Extension", .serialized)
 struct UIImageExtensionTests {
 
     // MARK: - imageProportionally guards
@@ -115,6 +119,31 @@ struct UIImageExtensionTests {
           ])
     func aspectFillSizeRejectsDegenerate(source: CGSize, target: CGSize) {
         #expect(UIImage.aspectFillSize(for: source, fitting: target) == nil)
+    }
+
+    // MARK: - loadGif(name:) failure handling
+
+    @Test("Given loadGif(name:) with a missing resource, when the decode fails, then the existing image is preserved")
+    func loadGifNameMissingPreservesImage() async {
+        let view = UIImageView()
+        let existing = makeImage(size: CGSize(width: 4, height: 4))
+        view.image = existing
+
+        // Await the real decode-completion signal instead of sleeping, so the assertion runs AFTER
+        // the (nil) decode was handled — proving the image was preserved because the failed decode
+        // was skipped, not merely because the background task had not run yet. Installing the hook
+        // before `loadGif` is safe: this is `@MainActor`, so the load's `@MainActor` task cannot run
+        // until we suspend at the continuation below.
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            UIImageView.didFinishLoadGifNameForTesting = {
+                UIImageView.didFinishLoadGifNameForTesting = nil
+                continuation.resume()
+            }
+            view.loadGif(name: "___missing_resource_that_does_not_exist___")
+        }
+
+        // A failed decode must not blank the view (C050): the previous image stays untouched.
+        #expect(view.image === existing)
     }
 
     // MARK: - Helpers

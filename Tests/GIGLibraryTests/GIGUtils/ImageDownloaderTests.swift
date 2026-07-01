@@ -26,6 +26,27 @@ struct ImageDownloaderTests {
         #expect(ImageDownloaderConfiguration.maxConcurrentDownloads == 1)
     }
 
+    @Test("Given a reset downloader, then the default max cached images is 100")
+    func defaultMaxCachedImagesIsHundred() {
+        ImageDownloader.resetForTesting()
+
+        #expect(ImageDownloaderConfiguration.maxCachedImages == ImageDownloaderConfiguration.defaultMaxCachedImages)
+    }
+
+    @Test("Given a value for max cached images, when set, then it is stored and negatives clamp to 0")
+    func maxCachedImagesStoresAndClamps() {
+        ImageDownloader.resetForTesting()
+
+        ImageDownloaderConfiguration.maxCachedImages = 50
+        #expect(ImageDownloaderConfiguration.maxCachedImages == 50)
+
+        ImageDownloaderConfiguration.maxCachedImages = -10
+        #expect(ImageDownloaderConfiguration.maxCachedImages == 0)
+
+        // Restore the default so later tests observe the standard cache limit.
+        ImageDownloader.resetForTesting()
+    }
+
     // MARK: - Concurrency limit
 
     @Test("Given a max of 2, when 5 downloads are requested in one tick, then only 2 are active and 3 stay queued")
@@ -78,8 +99,9 @@ struct ImageDownloaderTests {
         let urlString = "https://example.com/success.png"
         // Inject a PNG response directly instead of going through URLSession, whose stalls under CI
         // load (NSURLError -1001) made this test flaky. The success path (decode → resize → cache)
-        // still runs for real. The Response's `url` is only nominal — the cache key is
-        // `request.baseURL` — so any valid URL works. See `ImageDownloader.fetchProvider`.
+        // still runs for real. The Response's `url` is only nominal — the cache key is the caller's
+        // original URL string (`PendingDownload.url`), independent of the Response's own `url`, so
+        // any valid response URL works. See `ImageDownloader.fetchProvider`.
         ImageDownloader.fetchProvider = { _ in
             makeImageResponse(body: makePNGData(), url: URL(fileURLWithPath: "/success.png"))
         }
@@ -93,7 +115,7 @@ struct ImageDownloaderTests {
         // of polling: under CI load the `.utility` resize task can be scheduled late, which used to
         // exhaust `waitUntil`'s deadline and flake. See `awaitCache`.
         await awaitCache(of: urlString)
-        #expect(ImageDownloader.images[urlString] != nil)
+        #expect(ImageDownloader.images.object(forKey: urlString as NSString) != nil)
         #expect(ImageDownloader.activeDownloads == 0)
     }
 
@@ -213,9 +235,61 @@ struct ImageDownloaderTests {
         ImageDownloader.shared.download(url: urlString, for: view, placeholder: nil)
 
         await awaitCache(of: urlString)
-        #expect(ImageDownloader.images[urlString] != nil)
-        #expect(ImageDownloader.images[urlString]?.images != nil)
+        #expect(ImageDownloader.images.object(forKey: urlString as NSString) != nil)
+        #expect(ImageDownloader.images.object(forKey: urlString as NSString)?.images != nil)
         #expect(ImageDownloader.activeDownloads == 0)
+    }
+
+    // MARK: - loadGif(urlString:) routing
+
+    @Test("Given loadGif(urlString:), when called, then it routes through the managed download path")
+    func loadGifURLStringRoutesThroughImageDownloader() async {
+        ImageDownloader.resetForTesting()
+        useFailFastRequests()
+
+        let view = makeImageView()
+        view.loadGif(urlString: "https://example.com/animation.gif")
+
+        // A managed download is registered for the view (async/cancellable path), rather than the
+        // old synchronous `Data(contentsOf:)` on a background thread. Checked before draining: this
+        // is `@MainActor` so `download()` enqueues synchronously (before any `await`), and the
+        // fail-fast request clears the entry once it unwinds, so the entry only exists pre-drain.
+        #expect(ImageDownloader.queue[view] != nil)
+
+        let drained = await waitUntil { ImageDownloader.activeDownloads == 0 }
+        #expect(drained)
+    }
+
+    @Test("Given loadGif(urlString:) called twice on a reused view, when both resolve, then the view shows the last URL and only it is cached")
+    func loadGifURLStringReusedViewShowsLastImage() async {
+        ImageDownloader.resetForTesting()
+        let firstURL = "https://example.com/first.gif"
+        let secondURL = "https://example.com/second.gif"
+        // Both requests would decode to a valid image; which one paints is decided by the view
+        // identity guard, not by which finishes first. See `ImageDownloader.fetchProvider`.
+        ImageDownloader.fetchProvider = { _ in
+            makeImageResponse(body: makePNGData(), url: URL(fileURLWithPath: "/reused.png"))
+        }
+
+        // Simulates a reused cell: two GIF loads in quick succession on the same view.
+        let view = makeImageView()
+        view.loadGif(urlString: firstURL)
+        view.loadGif(urlString: secondURL)
+
+        // Await the last URL's cache write deterministically.
+        await awaitCache(of: secondURL)
+
+        // Observable outcome: the last-requested URL is the one that completes, caches, and paints;
+        // the replaced first request is dropped by the identity guard before it can fetch, so it
+        // never populates the cache. `handleResponse` paints and caches the SAME decoded instance,
+        // so the view showing exactly the second URL's image is asserted by identity.
+        let cachedSecond = ImageDownloader.images.object(forKey: secondURL as NSString)
+        #expect(cachedSecond != nil)
+        #expect(ImageDownloader.images.object(forKey: firstURL as NSString) == nil)
+        #expect(view.image === cachedSecond)
+
+        let drained = await waitUntil { ImageDownloader.activeDownloads == 0 }
+        #expect(drained)
     }
 
     // MARK: - Cache hit
@@ -225,7 +299,7 @@ struct ImageDownloaderTests {
         ImageDownloader.resetForTesting()
         let urlString = "https://example.com/cached.png"
         let cached = makeImage(.blue)
-        ImageDownloader.images[urlString] = cached
+        ImageDownloader.images.setObject(cached, forKey: urlString as NSString)
 
         let view = makeImageView()
         ImageDownloader.shared.download(url: urlString, for: view, placeholder: nil)
@@ -306,7 +380,8 @@ extension ImageDownloader {
     static func resetForTesting() {
         queue = [:]
         stack = []
-        images = [:]
+        images.removeAllObjects()
+        images.countLimit = ImageDownloaderConfiguration.defaultMaxCachedImages
         activeDownloads = 0
         maxConcurrentDownloads = 6  // setter clamps and pumps (a no-op while the stack is empty)
         requestProvider = { url in Request(method: .get, baseUrl: url, endpoint: "", bodyParams: nil) }
