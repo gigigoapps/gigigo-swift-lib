@@ -11,6 +11,10 @@
 import Testing
 @testable import GIGLibrary
 
+// `@MainActor` because the real `MultiDelegable` is main-actor isolated, so its
+// observers are invoked on the main actor; a nonisolated protocol here would make a
+// @MainActor conformer's witness cross actor boundaries (a Swift 6 error under CI).
+@MainActor
 protocol MultiDelegableTestObserver: AnyObject {
     func ping()
 }
@@ -18,12 +22,14 @@ protocol MultiDelegableTestObserver: AnyObject {
 @MainActor
 final class MultiDelegableTestBroadcaster: MultiDelegable {
     typealias Observer = MultiDelegableTestObserver
+
     var observers: [WeakWrapper] = []
 }
 
 @MainActor
 final class MultiDelegableTestSpy: MultiDelegableTestObserver {
     private(set) var pingCount = 0
+
     func ping() { self.pingCount += 1 }
 }
 
