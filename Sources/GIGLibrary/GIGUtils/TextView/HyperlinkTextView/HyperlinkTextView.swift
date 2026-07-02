@@ -25,6 +25,15 @@ public final class HyperlinkTextView: UITextView {
     /// expensive; `ExpandableTextView` re-parses on every collapse/expand. Caching
     /// keeps repeated parses of the same content off the main thread's hot path (C079).
     private var attributedTextCache: [String: NSAttributedString] = [:]
+    /// Insertion order of the cache keys, used to evict the oldest entry first.
+    private var attributedTextCacheOrder: [String] = []
+    /// Upper bound on cached entries. The known consumer (`ExpandableTextView`)
+    /// only alternates between two texts, but a caller that feeds highly variable
+    /// content (e.g. a reused cell) could otherwise grow the cache unbounded. We
+    /// evict the oldest entry when the cap is hit (FIFO), which keeps memory bounded
+    /// while still serving repeated recent content — unlike dropping the whole map,
+    /// which would defeat the cache exactly in that highly-variable case.
+    private static let attributedTextCacheLimit = 32
     
     // MARK: - Initalizers 
     
@@ -82,6 +91,11 @@ public final class HyperlinkTextView: UITextView {
     
     private func setupAttributedString(from text: String) -> NSMutableAttributedString? {
         let pointSize = self.font?.pointSize ?? 10
+        // The font *family* is deliberately not part of the key: the underlying
+        // `NSAttributedString(fromHTML:pointSize:color:)` parser always uses the
+        // system font and ignores `self.font.fontName`, so `(pointSize, text)` are
+        // its only variable inputs (color is fixed to `.darkGray`). If that parser
+        // ever starts honouring the font family, the key must include it too.
         let cacheKey = "\(pointSize)|\(text)"
         if let cached = self.attributedTextCache[cacheKey] {
             return NSMutableAttributedString(attributedString: cached)
@@ -94,8 +108,21 @@ public final class HyperlinkTextView: UITextView {
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = 10
         styledAttributedText.addAttribute(NSAttributedString.Key.paragraphStyle, value: style, range: textRange)
-        self.attributedTextCache[cacheKey] = NSAttributedString(attributedString: styledAttributedText)
+        self.cache(NSAttributedString(attributedString: styledAttributedText), for: cacheKey)
         return styledAttributedText
+    }
+
+    /// Stores a parsed attributed string, evicting the oldest entry (FIFO) once the
+    /// cache exceeds `attributedTextCacheLimit` so it stays bounded (C079).
+    private func cache(_ attributedString: NSAttributedString, for key: String) {
+        if self.attributedTextCache[key] == nil {
+            self.attributedTextCacheOrder.append(key)
+            if self.attributedTextCacheOrder.count > Self.attributedTextCacheLimit {
+                let oldest = self.attributedTextCacheOrder.removeFirst()
+                self.attributedTextCache.removeValue(forKey: oldest)
+            }
+        }
+        self.attributedTextCache[key] = attributedString
     }
     
     @objc

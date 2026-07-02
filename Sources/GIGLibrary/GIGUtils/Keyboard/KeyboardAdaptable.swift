@@ -82,6 +82,10 @@ public extension KeyboardAdaptable where Self: UIViewController {
                     if let window = UIApplication.shared.activeWindow {
                         // Capture the pre-keyboard height once so hide can restore it
                         // exactly, keeping show/hide symmetric across repeated cycles (C037).
+                        // Assumes the view height is not changed by anything else while the
+                        // keyboard is visible; a rotation / split-view resize with the keyboard
+                        // up would restore the stale pre-rotation height. That is an accepted
+                        // limitation for the common portrait, no-rotation-while-editing case.
                         if self.keyboardOriginalHeight == nil {
                             self.keyboardOriginalHeight = self.view.frame.size.height
                         }

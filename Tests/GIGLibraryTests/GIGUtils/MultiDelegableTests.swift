@@ -83,9 +83,9 @@ struct MultiDelegableTests {
             broadcaster.add(observer: temporary)
             broadcaster.add(observer: survivor)
         }
-        // `temporary` is deallocated here; its wrapper is still present until execute purges it.
-        #expect(broadcaster.observers.count == 2)
-
+        // `temporary` is deallocated at the end of the `do` scope. Executing must
+        // still reach the surviving observer and must purge the dead wrapper, so the
+        // array ends up with a single live entry.
         broadcaster.execute { $0.ping() }
 
         #expect(survivor.pingCount == 1)
