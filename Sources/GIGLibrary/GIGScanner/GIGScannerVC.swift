@@ -122,7 +122,8 @@ public class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOu
 	///
 	/// `completion` is always invoked on the main actor. For already-determined
 	/// authorization states it is called synchronously; for `.notDetermined` it is
-	/// called asynchronously once the system permission prompt resolves.
+	/// called asynchronously once the system permission prompt resolves. Any unknown
+	/// future status fails closed (delivers `false`) rather than prompting.
 	public func isCameraAvailable(completion: @escaping (Bool) -> Void) {
 		let authStatus: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: AVMediaType.video)
 		switch authStatus {
@@ -132,8 +133,9 @@ public class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOu
 			completion(false)
 		case .notDetermined:
 			self.requestCameraAccess(completion: completion)
-		default:
-			self.requestCameraAccess(completion: completion)
+		@unknown default:
+			// Unknown/future authorization state: fail closed instead of prompting.
+			completion(false)
 		}
 	}
 	
