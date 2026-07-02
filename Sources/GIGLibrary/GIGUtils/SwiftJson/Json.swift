@@ -9,9 +9,16 @@
 import Foundation
 
 
-public final class JSON: Sequence, CustomStringConvertible {
-	
-	private var json: Any
+/// `@unchecked Sendable` is sound by design under one invariant: `json` is a `let` populated once in
+/// `init(from:)` and never reassigned or mutated afterwards. Every other method is read-only — they
+/// cast or serialize `json` without writing to it — so although a `JSON` can cross a concurrency
+/// boundary (it is stored in `Response.data`), only immutable reads ever touch its state. The backing
+/// store is `Any` (JSON parsed via `JSONSerialization`, i.e. Foundation value/immutable types), which
+/// the compiler cannot prove `Sendable`; the `@unchecked` annotation asserts the immutability
+/// invariant above in its place, consistent with `Request`/`Response`/`LogManager`.
+public final class JSON: Sequence, CustomStringConvertible, @unchecked Sendable {
+
+	private let json: Any
 	
 	public var description: String {
 		if let data = try? JSONSerialization.data(withJSONObject: self.json, options: .prettyPrinted) as Data {
@@ -31,27 +38,20 @@ public final class JSON: Sequence, CustomStringConvertible {
 	}
 	
 	public subscript(path: String) -> JSON? {
-		guard var jsonDict = self.json as? [String: Any] else {
-			return nil
-		}
-		
-		var json = self.json
+		var current: Any = self.json
 		let pathArray = path.components(separatedBy: ".")
-		
+
 		for key in pathArray {
-			
-			if let jsonObject = jsonDict[key] {
-				json = jsonObject
-				
-				if let jsonDictNext = jsonObject as? [String: Any] {
-					jsonDict = jsonDictNext
-				}
-			} else {
+			// Traverse from the *current* node: if an intermediate key resolves to a
+			// non-dictionary while path components remain, the cast fails and we return
+			// `nil` instead of silently querying the previous level's dictionary.
+			guard let dict = current as? [String: Any], let next = dict[key] else {
 				return nil
 			}
+			current = next
 		}
-		
-		return JSON(from: json)
+
+		return JSON(from: current)
 	}
     
     public subscript(index: Int) -> JSON? {
