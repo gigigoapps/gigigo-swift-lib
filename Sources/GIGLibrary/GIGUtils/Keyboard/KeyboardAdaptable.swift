@@ -50,6 +50,12 @@ public extension KeyboardAdaptable where Self: UIViewController {
             NotificationCenter.default.removeObserver(token)
         }
         self.keyboardObserverTokens = []
+        // Reset the captured height so each start/stop lifecycle begins fresh. If the
+        // view disappears (viewWillDisappear -> stopKeyboard) while the keyboard is
+        // still up, keyboardWillHide never fires to clear it; leaving it non-nil would
+        // make the next show skip capturing the current height and later restore a
+        // stale one after rotation / split-view / relayout (C037).
+        self.keyboardOriginalHeight = nil
 	}
 	
 	// MARK: - Optional Public Methods
