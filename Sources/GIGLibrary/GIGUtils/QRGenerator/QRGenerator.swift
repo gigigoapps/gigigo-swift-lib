@@ -22,7 +22,12 @@ public final class QR {
 	@MainActor
 	public static func generate(_ string: String, onView: UIImageView) {
 		guard let image: CGImage = self.generate(string) else { return }
-		
+
+		// A zero-sized view cannot back a bitmap context: `CGContext(width:0,height:0,...)` returns
+		// nil and we would bail out anyway. Guard explicitly so the degenerate case is intentional
+		// and documented, rather than relying on the context creation failing downstream.
+		guard onView.frame.size.width > 0, onView.frame.size.height > 0 else { return }
+
         let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
         guard let context = CGContext(
             data: nil,

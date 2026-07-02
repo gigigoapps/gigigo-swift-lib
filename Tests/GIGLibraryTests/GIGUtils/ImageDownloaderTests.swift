@@ -455,6 +455,29 @@ struct ImageDownloaderTests {
         #expect(view.image === cached)
     }
 
+    // MARK: - Memory warning
+
+    @Test("Given a cached image, when a memory warning is posted, then the cache is purged")
+    func memoryWarningPurgesCache() async {
+        ImageDownloader.resetForTesting()
+        // Touch `shared` so the singleton's memory-warning observer is registered (it is installed
+        // in `ImageDownloader`'s private init). `resetForTesting` already accesses `shared` via the
+        // `maxConcurrentDownloads` setter, but assert it explicitly to make the dependency obvious.
+        _ = ImageDownloader.shared
+
+        let urlString = "https://example.com/memory-warning.png"
+        let cached = makeImage(.blue)
+        ImageDownloader.images.setObject(cached, forKey: urlString as NSString)
+        #expect(ImageDownloader.images.object(forKey: urlString as NSString) != nil)
+
+        // The observer clears the cache on the main queue and then hops through a `Task { @MainActor }`,
+        // so the purge is asynchronous — poll until the entry is gone rather than asserting inline.
+        NotificationCenter.default.post(name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+
+        let purged = await waitUntil { ImageDownloader.images.object(forKey: urlString as NSString) == nil }
+        #expect(purged)
+    }
+
     // MARK: - Helpers
 
     /// Points the downloader at requests that fail fast in `preChecks` (reachability off), so each
