@@ -36,9 +36,10 @@ public enum ResponseError: Error {
 /// mutable reference — so although it crosses a concurrency boundary, only one context ever touches
 /// it at a time. Every stored property is therefore exposed as `public private(set)`: consumers read
 /// it, no one outside the type can mutate it post-init. `data` is a `JSON` (a mutable reference
-/// type); it too is built during `init` and neither shared nor mutated afterwards. `JSON` is itself
-/// `@unchecked Sendable` with an immutable (`let`) backing store (see `Json.swift`), so it upholds
-/// the same write-once invariant this type relies on.
+/// type); it too is built during `init` and neither shared nor mutated afterwards. `JSON` is
+/// intentionally *not* `Sendable` — its `Any` payload could be an externally-mutable reference (see
+/// `Json.swift`) — so containing it here is sound precisely because of the write-once invariant
+/// above, not because `JSON` is thread-safe on its own.
 public class Response: Selfie, @unchecked Sendable {
 
 	public private(set) var status: ResponseStatus

@@ -11,9 +11,10 @@ import CoreData
 
 public extension NSManagedObjectContext {
 
-	/// Inserts a new managed object for `name`, executed on the context's own queue via
-	/// `performAndWait` so it is safe to call from any thread. Returns `nil` if the entity
-	/// name is unknown to the model.
+	/// Inserts a new managed object for `name`. The insertion runs on the context's own queue via
+	/// `performAndWait`, but the returned `NSManagedObject` is confined to that queue: read or
+	/// mutate it only on the context's queue (e.g. inside `context.perform`/`performAndWait`, or on
+	/// the main thread for a main-queue context). Returns `nil` if the entity name is unknown.
     func createEntity(_ name: String) -> NSManagedObject? {
 		self.performAndWait {
 			guard let entity = NSEntityDescription.entity(forEntityName: name, in: self) else {
@@ -24,10 +25,11 @@ public extension NSManagedObjectContext {
 		}
 	}
 
-	/// Fetches the first object of `entityName` matching `predicate` (all objects if `nil`).
-	/// Runs on the context's queue and propagates any underlying Core Data fetch error instead
-	/// of swallowing it. The `predicate` is a pre-built `NSPredicate`, so callers cannot inject
-	/// an unbound format string.
+	/// Fetches the first object of `entityName` matching `predicate` (all objects if `nil`). The
+	/// fetch runs on the context's queue and propagates any underlying Core Data error instead of
+	/// swallowing it. The returned object is confined to the context's queue — use it only on that
+	/// queue. The `predicate` is a pre-built `NSPredicate`, so callers cannot inject an unbound
+	/// format string.
     func fetchFirst(_ entityName: String, predicate: NSPredicate? = nil) throws -> NSManagedObject? {
 		// `NSPredicate` is not `Sendable`, but it is only read synchronously on the context's own
 		// queue inside `performAndWait` — it never actually crosses to another thread.
@@ -41,10 +43,11 @@ public extension NSManagedObjectContext {
 		}
 	}
 
-	/// Fetches all objects of `entityName` matching `predicate` (all objects if `nil`).
-	/// Runs on the context's queue and propagates any underlying Core Data fetch error instead
-	/// of swallowing it. The `predicate` is a pre-built `NSPredicate`, so callers cannot inject
-	/// an unbound format string.
+	/// Fetches all objects of `entityName` matching `predicate` (all objects if `nil`). The fetch
+	/// runs on the context's queue and propagates any underlying Core Data error instead of
+	/// swallowing it. The returned objects are confined to the context's queue — use them only on
+	/// that queue. The `predicate` is a pre-built `NSPredicate`, so callers cannot inject an unbound
+	/// format string.
     func fetchList(_ entityName: String, predicate: NSPredicate? = nil) throws -> [NSManagedObject] {
 		// `NSPredicate` is not `Sendable`, but it is only read synchronously on the context's own
 		// queue inside `performAndWait` — it never actually crosses to another thread.
