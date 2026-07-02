@@ -10,20 +10,39 @@ import UIKit
 import AVFoundation
 
 
-public protocol GIGScannerOutput {
+// `GIGScannerVC` is `@MainActor`; scan callbacks are delivered on the main actor,
+// so the output is class-bound and main-actor isolated. This is source-breaking:
+// conformers must now be reference types and main-actor isolated.
+@MainActor
+public protocol GIGScannerOutput: AnyObject {
 	func didSuccessfullyScan(_ scannedValue: String, type: String)
 }
 
+@MainActor
 public class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOutputObjectsDelegate {
-	
-	public var scannerOutput: GIGScannerOutput?
+
+	public weak var scannerOutput: GIGScannerOutput?
 	var captureSession: AVCaptureSession?
 	var previewLayer: AVCaptureVideoPreviewLayer?
 	var codeFrameView: UIView?
 	var captureDevice: AVCaptureDevice?
-	
+
 	override public func viewDidLoad() {
 		super.viewDidLoad()
+		// The VC manages camera permissions internally: the AVCaptureSession is only
+		// configured once authorization is confirmed. Building AVCaptureDeviceInput
+		// before checking authorization is what C035 flags, so we gate it here.
+		self.isCameraAvailable { [weak self] granted in
+			guard let self else { return }
+			guard granted else {
+				LogWarn("Camera access not granted; scanner session not configured")
+				return
+			}
+			self.configureCaptureSession()
+		}
+	}
+
+	private func configureCaptureSession() {
 		guard let captureDevice = AVCaptureDevice.default(for: AVMediaType.video) else {
 			LogWarn("No video capture device available")
 			return
@@ -33,10 +52,10 @@ public class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOu
 			let input = try AVCaptureDeviceInput(device: captureDevice)
 			self.captureSession = AVCaptureSession()
 			self.captureSession?.addInput(input)
-			
+
 			let captureMetadataOutput = AVCaptureMetadataOutput()
 			self.captureSession?.addOutput(captureMetadataOutput)
-			
+
 			captureMetadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
 			captureMetadataOutput.metadataObjectTypes = [
 				AVMetadataObject.ObjectType.upce,
@@ -50,7 +69,7 @@ public class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOu
 				AVMetadataObject.ObjectType.aztec,
 				AVMetadataObject.ObjectType.qr
 			]
-			
+
 			self.addPreviewLayer()
 			self.captureDevice = captureDevice
 

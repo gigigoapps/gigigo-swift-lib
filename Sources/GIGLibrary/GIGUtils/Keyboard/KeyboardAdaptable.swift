@@ -7,6 +7,7 @@
 //
 
 import UIKit
+import ObjectiveC.runtime
 
 @MainActor
 public protocol KeyboardAdaptable {
@@ -26,17 +27,25 @@ typealias KeyboardEventContext = Keyboard.KeyboardEventContext
 public extension KeyboardAdaptable where Self: UIViewController {
 	
 	// MARK: - Public Methods
-	
+
 	/// Must call this method on viewWillAppear
     func startKeyboard() {
-		self.manageKeyboardShowEvent()
-		self.manageKeyboardHideEvent()
-        self.manageKeyboardChangeFrameEvent()
+        // Observers are tied to *this* instance. Previously they lived in a single
+        // static array shared by every KeyboardAdaptable VC, so one screen's
+        // stopKeyboard() tore down the observers of any other live screen (C036).
+        self.keyboardObserverTokens = [
+            self.manageKeyboardShowEvent(),
+            self.manageKeyboardHideEvent(),
+            self.manageKeyboardChangeFrameEvent()
+        ]
 	}
-	
+
 	/// Must call this method on viewWillDisappear
     func stopKeyboard() {
-		Keyboard.removeObservers()
+        for token in self.keyboardObserverTokens {
+            NotificationCenter.default.removeObserver(token)
+        }
+        self.keyboardObserverTokens = []
 	}
 	
 	// MARK: - Optional Public Methods
@@ -48,8 +57,8 @@ public extension KeyboardAdaptable where Self: UIViewController {
 	
 	
 	// MARK: - Private Helpers
-    
-    fileprivate func manageKeyboardChangeFrameEvent() {
+
+    fileprivate func manageKeyboardChangeFrameEvent() -> NSObjectProtocol {
         Keyboard.willChange { context in
             guard let size = context.size else {
                 return LogWarn("Couldn't get keyboard size")
@@ -58,8 +67,8 @@ public extension KeyboardAdaptable where Self: UIViewController {
             self.keyboardChangeFrame(size)
         }
     }
-	
-	fileprivate func manageKeyboardShowEvent() {
+
+	fileprivate func manageKeyboardShowEvent() -> NSObjectProtocol {
 		Keyboard.willShow { context in
             guard let size = context.size else {
                 return LogWarn("Couldn't get keyboard size")
@@ -71,6 +80,11 @@ public extension KeyboardAdaptable where Self: UIViewController {
                 curve: context.curve,
                 changes: {
                     if let window = UIApplication.shared.activeWindow {
+                        // Capture the pre-keyboard height once so hide can restore it
+                        // exactly, keeping show/hide symmetric across repeated cycles (C037).
+                        if self.keyboardOriginalHeight == nil {
+                            self.keyboardOriginalHeight = self.view.frame.size.height
+                        }
                         var appHeight = window.frame.height
                         if self.navigationController != nil {
                             appHeight -= self.navigationController?.navigationBar.frame.size.height ?? 0
@@ -87,21 +101,19 @@ public extension KeyboardAdaptable where Self: UIViewController {
             )
 		}
 	}
-	
-	fileprivate func manageKeyboardHideEvent() {
+
+	fileprivate func manageKeyboardHideEvent() -> NSObjectProtocol {
 		Keyboard.willHide { context in
             self.keyboardWillHide()
             self.animateKeyboardChanges(
                 duration: context.duration,
                 curve: context.curve,
                 changes: {
-                    if let window = UIApplication.shared.activeWindow {
-                        var appHeight = window.frame.height
-                        if self.navigationController != nil {
-                            appHeight -= self.navigationController?.navigationBar.frame.size.height ?? 0
-                        }
-                        let statusBarHeight = window.windowScene?.statusBarManager?.statusBarFrame.height ?? 0
-                        self.view.frame.size.height = appHeight - statusBarHeight
+                    // Restore the exact height captured when the keyboard first
+                    // appeared, instead of recomputing an approximation that drifts (C037).
+                    if let originalHeight = self.keyboardOriginalHeight {
+                        self.view.frame.size.height = originalHeight
+                        self.keyboardOriginalHeight = nil
                     }
                 },
                 onCompletion: {
@@ -125,6 +137,25 @@ public extension KeyboardAdaptable where Self: UIViewController {
 			}
 		)
 	}
+
+    // MARK: - Per-instance state (associated objects)
+
+    private var keyboardObserverTokens: [NSObjectProtocol] {
+        get { objc_getAssociatedObject(self, &KeyboardAssociatedKeys.tokens) as? [NSObjectProtocol] ?? [] }
+        set { objc_setAssociatedObject(self, &KeyboardAssociatedKeys.tokens, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+    }
+
+    private var keyboardOriginalHeight: CGFloat? {
+        get { (objc_getAssociatedObject(self, &KeyboardAssociatedKeys.originalHeight) as? NSNumber).map { CGFloat($0.doubleValue) } }
+        set { objc_setAssociatedObject(self, &KeyboardAssociatedKeys.originalHeight, newValue.map { NSNumber(value: Double($0)) }, .OBJC_ASSOCIATION_RETAIN_NONATOMIC) }
+    }
+}
+
+private enum KeyboardAssociatedKeys {
+    // Only the addresses of these statics are used, as opaque associated-object keys;
+    // their values are never read or written, so `nonisolated(unsafe)` is safe.
+    nonisolated(unsafe) static var tokens: UInt8 = 0
+    nonisolated(unsafe) static var originalHeight: UInt8 = 0
 }
 
 
@@ -137,29 +168,23 @@ class Keyboard {
         let curve: UIView.AnimationOptions
     }
 	
-	fileprivate static var observers: [AnyObject] = []
-	
-	class func removeObservers() {
-		for observer in self.observers {
-			NotificationCenter.default.removeObserver(observer)
-		}
-		
-		self.observers.removeAll()
-	}
-	
-	class func willShow(_ notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) {
+	@discardableResult
+	class func willShow(_ notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) -> NSObjectProtocol {
 		self.keyboardEvent(UIResponder.keyboardWillShowNotification.rawValue, notificationHandler: notificationHandler)
 	}
-	
-	class func didShow(_ notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) {
+
+	@discardableResult
+	class func didShow(_ notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) -> NSObjectProtocol {
 		self.keyboardEvent(UIResponder.keyboardDidShowNotification.rawValue, notificationHandler: notificationHandler)
 	}
-	
-	class func willHide(_ notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) {
+
+	@discardableResult
+	class func willHide(_ notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) -> NSObjectProtocol {
 		self.keyboardEvent(UIResponder.keyboardWillHideNotification.rawValue, notificationHandler: notificationHandler)
 	}
 
-    class func willChange(_ notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) {
+	@discardableResult
+    class func willChange(_ notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) -> NSObjectProtocol {
         self.keyboardEvent(UIResponder.keyboardWillChangeFrameNotification.rawValue, notificationHandler: notificationHandler)
     }
 	
@@ -200,8 +225,8 @@ class Keyboard {
 	
 	// MARK: - Private Helpers
 	
-	fileprivate class func keyboardEvent(_ event: String, notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) {
-		let observer = NotificationCenter.default
+	fileprivate class func keyboardEvent(_ event: String, notificationHandler: @escaping @Sendable @MainActor (KeyboardEventContext) -> Void) -> NSObjectProtocol {
+		return NotificationCenter.default
 			.addObserver(
 				forName: NSNotification.Name(rawValue: event),
 				object: nil,
@@ -217,8 +242,6 @@ class Keyboard {
                     }
                 }
 		)
-        
-		self.observers.append(observer)
 	}
 	
 }

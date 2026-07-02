@@ -19,6 +19,12 @@ public final class HyperlinkTextView: UITextView {
     
     // MARK: - Private properties
     private var linkTapGestureRecognizer: UITapGestureRecognizer?
+    /// Caches parsed attributed strings keyed by (font size, html text).
+    ///
+    /// HTML parsing via `NSAttributedString(fromHTML:)` spins up WebKit and is
+    /// expensive; `ExpandableTextView` re-parses on every collapse/expand. Caching
+    /// keeps repeated parses of the same content off the main thread's hot path (C079).
+    private var attributedTextCache: [String: NSAttributedString] = [:]
     
     // MARK: - Initalizers 
     
@@ -75,12 +81,20 @@ public final class HyperlinkTextView: UITextView {
     }
     
     private func setupAttributedString(from text: String) -> NSMutableAttributedString? {
-        self.setupAttributedTextWithFont()
-        guard let styledAttributedText = NSMutableAttributedString(fromHTML: text, pointSize: self.font?.pointSize ?? 10, color: .darkGray)  else { return nil }
+        let pointSize = self.font?.pointSize ?? 10
+        let cacheKey = "\(pointSize)|\(text)"
+        if let cached = self.attributedTextCache[cacheKey] {
+            return NSMutableAttributedString(attributedString: cached)
+        }
+        // Single HTML parse. The previous `setupAttributedTextWithFont()` call was a
+        // second, redundant parse whose result was immediately overwritten by the
+        // caller, so it produced no visible effect while doubling the cost (C079).
+        guard let styledAttributedText = NSMutableAttributedString(fromHTML: text, pointSize: pointSize, color: .darkGray) else { return nil }
         let textRange = NSRange(location: 0, length: styledAttributedText.string.count)
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = 10
         styledAttributedText.addAttribute(NSAttributedString.Key.paragraphStyle, value: style, range: textRange)
+        self.attributedTextCache[cacheKey] = NSAttributedString(attributedString: styledAttributedText)
         return styledAttributedText
     }
     
@@ -130,18 +144,6 @@ public final class HyperlinkTextView: UITextView {
             let URL = URL(string: hyperlink) {
             self.hyperlinkDelegate?.didTapOnHyperlink(URL: URL)
         }
-        
-    }
-    
-    private func setupAttributedTextWithFont() {
-        guard
-            let font = self.font,
-            let htmlFontData = String(format: "<span style=\"font-family: '-apple-system', '\(font.fontName)'; font-size: \(font.pointSize)\">%@</span>", self.attributedText.string).data(using: .unicode, allowLossyConversion: false) else { return }
-        let attributedText = try? NSAttributedString(
-            data: htmlFontData,
-            options: [NSAttributedString.DocumentReadingOptionKey.documentType: NSAttributedString.DocumentType.html],
-            documentAttributes: nil
-        )
-        self.attributedText = attributedText
+
     }
 }

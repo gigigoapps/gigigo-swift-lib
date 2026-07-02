@@ -8,9 +8,18 @@
 
 import Foundation
 
-//// Protocol for enabling multiple delegation, forwarding delegate messages to multiple objects instead of being restricted to a single delegate object.
+/// Protocol for enabling multiple delegation, forwarding delegate messages to
+/// multiple objects instead of being restricted to a single delegate object.
+///
+/// - Important: This protocol is `@MainActor`-isolated. All observer bookkeeping
+///   (`add`/`remove`/`execute`) and the backing `observers` array are confined to
+///   the main actor, which removes the data race that a shared, unsynchronised
+///   array would otherwise expose (C022). Conform from main-actor types (typically
+///   UI delegates). This is source-breaking for conformers that previously mutated
+///   observers off the main thread.
+@MainActor
 public protocol MultiDelegable: AnyObject {
-    
+
     /// Delegate type
     associatedtype Observer
     /// Subscribed delegate objects
@@ -18,31 +27,30 @@ public protocol MultiDelegable: AnyObject {
 }
 
 public extension MultiDelegable {
-    
+
     /// Subscribes an object to the delegate messages.
     /// - parameters:
     ///     - observer: Delegate object to add as observer.
     func add(observer: Observer) {
-        let identifier = String(ObjectIdentifier(observer as AnyObject).hashValue)
-        if !self.observers.contains(where: { $0.identifier() == identifier }) {
-            self.observers.append(WeakWrapper(value: observer as AnyObject))
-        } else {
-            self.remove(observer: observer)
-            self.observers.append(WeakWrapper(value: observer as AnyObject))
-        }
+        let object = observer as AnyObject
+        let identifier = ObjectIdentifier(object)
+        // Drop any dead wrappers and any existing wrapper for this exact object,
+        // then append. Identity is compared via `ObjectIdentifier`, which is unique
+        // and stable per object — unlike `hashValue`, which can collide and is
+        // randomised per process run (C058).
+        self.observers.removeAll { $0.value == nil || $0.objectIdentifier == identifier }
+        self.observers.append(WeakWrapper(value: object))
     }
-    
+
     /// Unsubscribes an object to the delegate messages.
     /// - parameters:
-    ///     - observer: Delegate object to add as observer.
+    ///     - observer: Delegate object to remove as observer.
     func remove(observer: Observer) {
-        let identifier = String(ObjectIdentifier(observer as AnyObject).hashValue)
-        if let index = self.observers.firstIndex(where: { $0.identifier() == identifier }) {
-            self.observers.remove(at: index)
-        }
-        self.observers = self.observers.compactMap({ $0.value != nil ? $0 : nil }) // Remove nil objects
+        let identifier = ObjectIdentifier(observer as AnyObject)
+        // Remove the wrapper matching this object's identity, and purge dead ones.
+        self.observers.removeAll { $0.value == nil || $0.objectIdentifier == identifier }
     }
-    
+
     /// Executes a delegate method.
     /// - parameters:
     ///     - selector: Selector reference to delegate method.
@@ -52,21 +60,21 @@ public extension MultiDelegable {
                 selector(weak)
             }
         }
+        // Purge wrappers whose referent has been deallocated so the array does not
+        // grow unbounded with dead entries (C022).
+        self.observers.removeAll { $0.value == nil }
     }
 }
 
-/// Class with workaround for declaring arramappys with `weak` references
+/// Class with workaround for declaring arrays with `weak` references.
 public class WeakWrapper {
     public weak var value: AnyObject?
-    
+    /// Identity captured at construction time. Kept even after `value` is
+    /// deallocated so it can never resolve to a bogus/empty identifier (C058).
+    let objectIdentifier: ObjectIdentifier
+
     init(value: AnyObject) {
         self.value = value
-    }
-    
-    func identifier() -> String {
-        if let value = self.value {
-            return String(ObjectIdentifier(value).hashValue)
-        }
-        return ""
+        self.objectIdentifier = ObjectIdentifier(value)
     }
 }
