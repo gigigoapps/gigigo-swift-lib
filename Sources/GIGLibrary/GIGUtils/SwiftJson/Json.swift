@@ -9,14 +9,15 @@
 import Foundation
 
 
-/// `@unchecked Sendable` is sound by design under one invariant: `json` is a `let` populated once in
-/// `init(from:)` and never reassigned or mutated afterwards. Every other method is read-only — they
-/// cast or serialize `json` without writing to it — so although a `JSON` can cross a concurrency
-/// boundary (it is stored in `Response.data`), only immutable reads ever touch its state. The backing
-/// store is `Any` (JSON parsed via `JSONSerialization`, i.e. Foundation value/immutable types), which
-/// the compiler cannot prove `Sendable`; the `@unchecked` annotation asserts the immutability
-/// invariant above in its place, consistent with `Request`/`Response`/`LogManager`.
-public final class JSON: Sequence, CustomStringConvertible, @unchecked Sendable {
+/// `JSON` is intentionally **not** `Sendable`. `json` is a `let`, so the reference is never
+/// reassigned, but `init(from:)` is public and stores the value verbatim: a caller can wrap a
+/// mutable reference type (e.g. `NSMutableDictionary`/`NSMutableArray`) and mutate it externally
+/// while `subscript`/`toData()` read it. Claiming `@unchecked Sendable` would only suppress that
+/// data-race warning without making the payload safe, so we don't. `Response` does store a `JSON`
+/// in its `data` and is itself `@unchecked Sendable`, but that is sound because of `Response`'s own
+/// write-once invariant — it builds the `JSON` during `init` and never shares or mutates it
+/// afterwards (see `Response.swift`) — not because `JSON` is thread-safe on its own.
+public final class JSON: Sequence, CustomStringConvertible {
 
 	private let json: Any
 	
