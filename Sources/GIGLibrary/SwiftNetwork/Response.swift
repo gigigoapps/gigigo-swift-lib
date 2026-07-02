@@ -301,3 +301,24 @@ public class Response: Selfie, @unchecked Sendable {
 		}
 	}
 }
+
+// MARK: - Selfie
+
+extension Response {
+    /// Only the non-sensitive outcome fields — `status` and `statusCode` — are
+    /// printable via `Selfie`. Everything that can carry secrets or PII is
+    /// redacted:
+    /// - `headers`, raw `body`, parsed `data` — response payloads;
+    /// - `url` — the *resolved* URL, which embeds the request's `urlParams` (that
+    ///   `Request` already redacts) and any credential in the query string;
+    /// - `error` — `parseError(json:)` copies the server's error message into the
+    ///   `NSError.userInfo`, and `String(describing:)` for an `NSError` includes
+    ///   that userInfo, so a message carrying a token/PII would leak;
+    /// - internal collaborators.
+    ///
+    /// `status` and `statusCode` already convey the outcome (the route stays
+    /// visible via the originating `Request`'s `baseURL`/`endpoint`).
+    public var selfieExposedKeys: Set<String>? {
+        ["status", "statusCode"]
+    }
+}
