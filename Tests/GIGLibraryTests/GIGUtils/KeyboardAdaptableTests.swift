@@ -7,8 +7,10 @@
 //  stopKeyboard() removed the observers of every other live screen. Observers are
 //  now tied to the instance that registered them, so stopKeyboard() is selective.
 //
-//  Keyboard notifications are process-global, so this suite is `.serialized` to
-//  avoid cross-talk with any other suite that posts keyboard notifications.
+//  Keyboard notifications are process-global. This suite is `.serialized` so its
+//  own tests don't race each other on those notifications (`.serialized` only
+//  orders tests within a suite, not across suites); today no other suite posts
+//  keyboard notifications, so there is no cross-suite contention to worry about.
 //
 
 import UIKit
@@ -18,6 +20,7 @@ import Testing
 @MainActor
 final class KeyboardAdaptableTestVC: UIViewController, KeyboardAdaptable {
     private(set) var willShowCount = 0
+
     func keyboardWillShow() { self.willShowCount += 1 }
 }
 

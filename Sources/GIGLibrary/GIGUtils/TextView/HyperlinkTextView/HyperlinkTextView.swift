@@ -96,7 +96,10 @@ public final class HyperlinkTextView: UITextView {
         // system font and ignores `self.font.fontName`, so `(pointSize, text)` are
         // its only variable inputs (color is fixed to `.darkGray`). If that parser
         // ever starts honouring the font family, the key must include it too.
-        let cacheKey = "\(pointSize)|\(text)"
+        // Length is included so the `pointSize`/`text` boundary can't be forged by a
+        // text that happens to start with a number and separator (defensive; a key
+        // collision would only serve the wrong cached string, never crash).
+        let cacheKey = "\(pointSize)|\(text.count)|\(text)"
         if let cached = self.attributedTextCache[cacheKey] {
             return NSMutableAttributedString(attributedString: cached)
         }

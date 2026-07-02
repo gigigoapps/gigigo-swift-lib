@@ -26,6 +26,11 @@ public class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOu
 	var previewLayer: AVCaptureVideoPreviewLayer?
 	var codeFrameView: UIView?
 	var captureDevice: AVCaptureDevice?
+	/// Whether the caller wants scanning active. Because the session is configured
+	/// asynchronously (after the first-run permission prompt), `startScanning()` may
+	/// be called before `captureSession` exists; we remember the intent and start the
+	/// session as soon as it is configured, so first-run users don't see an idle scanner.
+	private var isScanningRequested = false
 
 	override public func viewDidLoad() {
 		super.viewDidLoad()
@@ -73,19 +78,27 @@ public class GIGScannerVC: UIViewController, @preconcurrency AVCaptureMetadataOu
 			self.addPreviewLayer()
 			self.captureDevice = captureDevice
 
+			// If the caller already requested scanning while we were waiting on the
+			// permission prompt, honour it now that the session exists.
+			if self.isScanningRequested {
+				self.captureSession?.startRunning()
+			}
+
 		} catch {
 			LogWarn("Error initialize camera")
 			return
 		}
 	}
-	
+
 	// MARK: - PUBLIC
-	
+
 	public func startScanning() {
+		self.isScanningRequested = true
 		self.captureSession?.startRunning()
 	}
-	
+
 	public func stopScanning() {
+		self.isScanningRequested = false
 		self.captureSession?.stopRunning()
 	}
 	

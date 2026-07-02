@@ -30,6 +30,10 @@ public extension KeyboardAdaptable where Self: UIViewController {
 
 	/// Must call this method on viewWillAppear
     func startKeyboard() {
+        // Unregister any observers from a previous startKeyboard() that was not paired
+        // with a stopKeyboard(); otherwise the old tokens would be overwritten without
+        // being removed, leaking those observers (and retaining self via their blocks).
+        self.stopKeyboard()
         // Observers are tied to *this* instance. Previously they lived in a single
         // static array shared by every KeyboardAdaptable VC, so one screen's
         // stopKeyboard() tore down the observers of any other live screen (C036).
