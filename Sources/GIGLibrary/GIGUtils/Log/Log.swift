@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import os
 
 
 public enum LogLevel: Int, Sendable {
@@ -72,6 +73,11 @@ public struct LogManagerSettings: Sendable {
 /// Sendable` conformance.
 public class LogManager: @unchecked Sendable {
     public static let shared = LogManager()
+
+    /// `os.Logger` subsystem shared by every library log line. The per-call
+    /// category is the resolved module name, so `log`/Console can filter output
+    /// per module.
+    private static let logSubsystem = "com.gigigo.giglibrary"
 
     private var _defaultSettings: LogManagerSettings
     private var settingsById: [String: LogManagerSettings]
@@ -209,11 +215,40 @@ public class LogManager: @unchecked Sendable {
     
     // MARK: - Logging
 
-    // Building the line, printing it, and invoking the optional `handler` all run
-    // inside `sync`, so handlers stay serialized with each other and with
-    // configuration changes. `sync` is reentrancy-tolerant, so a handler (or a
-    // custom `module.Identifier`) may safely read or set the synchronized
-    // accessors without dead-locking on the serial queue.
+    // Building the line, emitting it through `os.Logger`, and invoking the
+    // optional `handler` all run inside `sync`, so handlers stay serialized with
+    // each other and with configuration changes. `sync` is reentrancy-tolerant,
+    // so a handler (or a custom `module.Identifier`) may safely read or set the
+    // synchronized accessors without dead-locking on the serial queue.
+    //
+    // Emission goes through `emit(_:level:category:)` rather than `print`, so:
+    //   * nothing is written to stdout in Release builds (`print` compiles into
+    //     Release and would leak logs — including network payloads — whenever a
+    //     consumer raised `logLevel`);
+    //   * the message is interpolated with `privacy: .private`, so the OS redacts
+    //     it in production logs while a developer attached in Xcode still sees it;
+    //   * the module name becomes the `os.Logger` category for per-module
+    //     filtering.
+    // `os_log` is designed to be fast and non-blocking, so keeping emission inside
+    // the serial region (alongside the handler) preserves the S2 serialization
+    // guarantee without holding the queue on slow stdout I/O.
+    //
+    // Two behavioural notes vs. the former `print`:
+    //   * The optional `handler` still receives the full, UNREDACTED message — it
+    //     is a consumer-controlled seam, and `.private` redaction applies only to
+    //     the `os.Logger` sink. Consumers routing the handler to their own logs
+    //     are responsible for their own redaction.
+    //   * `.debug`/`.info` lines may be dropped by the unified logging system
+    //     unless enabled for this subsystem (Console / `log config`), whereas
+    //     `print` always wrote to stdout. `LogManager.logLevel` still gates
+    //     emission; this only affects what the OS persists/displays.
+
+    /// Emits a fully-formatted line through `os.Logger`. The message is logged
+    /// with `.private` privacy: redacted in production, visible while debugging.
+    private func emit(_ message: String, level: OSLogType, category: String) {
+        let logger = Logger(subsystem: Self.logSubsystem, category: category)
+        logger.log(level: level, "\(message, privacy: .private)")
+    }
 
     public func log(_ module: LoggableModule.Type?, message: String, filename: NSString = #file, line: Int = #line, funcname: String = #function, handler: ((String) -> Void)? = nil) {
         self.sync {
@@ -221,7 +256,7 @@ public class LogManager: @unchecked Sendable {
             guard settings.logLevel != .none else { return }
             let moduleName = settings.moduleName ?? module?.Identifier ?? "Gigigo Log Manager"
             let debugMessage = "[\(moduleName)]::" + message
-            print(debugMessage)
+            self.emit(debugMessage, level: .default, category: moduleName)
             handler?(debugMessage)
         }
     }
@@ -235,7 +270,7 @@ public class LogManager: @unchecked Sendable {
             let emoji = (settings.logStyle == .funny) ? " ⓘ" : ""
             let caller = "[Info\(emoji)] \(className)(\(line)) - \(funcname): "
             let debugMessage = "[\(moduleName)]::\(caller)::" + message
-            print(debugMessage)
+            self.emit(debugMessage, level: .info, category: moduleName)
             handler?(debugMessage)
         }
     }
@@ -249,7 +284,7 @@ public class LogManager: @unchecked Sendable {
             let emoji = (settings.logStyle == .funny) ? " 🐛" : ""
             let caller = "[Debug\(emoji)] \(className)(\(line)) - \(funcname): "
             let debugMessage = "[\(moduleName)]::\(caller)::" + message
-            print(debugMessage)
+            self.emit(debugMessage, level: .debug, category: moduleName)
             handler?(debugMessage)
         }
     }
@@ -265,7 +300,7 @@ public class LogManager: @unchecked Sendable {
             let emoji = (settings.logStyle == .funny) ? " 🔥" : ""
             let caller = "[Error\(emoji)] \(className)(\(line)) - \(funcname): \(err.localizedDescription)"
             let debugMessage = "[\(moduleName)]::\(caller)"
-            print(debugMessage)
+            self.emit(debugMessage, level: .error, category: moduleName)
             handler?(debugMessage)
         }
     }
@@ -279,7 +314,7 @@ public class LogManager: @unchecked Sendable {
             let emoji = (settings.logStyle == .funny) ? " 🔥" : ""
             let caller = "[Warn\(emoji)] \(className)(\(line)) - \(funcname): "
             let debugMessage = "[\(moduleName)]::\(caller)::" + message
-            print(debugMessage)
+            self.emit(debugMessage, level: .default, category: moduleName)
             handler?(debugMessage)
         }
     }

@@ -657,3 +657,36 @@ public class Request: Selfie, @unchecked Sendable {
         return data
     }
 }
+
+// MARK: - Selfie
+
+extension Request {
+    /// Only non-sensitive routing/config fields are printable via `Selfie`.
+    /// Everything else — `headers` (auth tokens), `urlParams`/`bodyParams`/
+    /// `bodyParamsArray`/`encodableBodyProvider` (request payloads) and internal
+    /// collaborators — is redacted so reflection never leaks secrets into logs.
+    ///
+    /// `baseURL`/`endpoint` are exposed only when they carry no embedded
+    /// credential. A caller may pass a query string or userinfo
+    /// (`user:pass@host`, `?access_token=…`) inside `baseUrl`/`endpoint`, and the
+    /// URL builder preserves it, so printing it verbatim would defeat the
+    /// redaction of `urlParams`. When either contains userinfo, a query or a
+    /// fragment it is redacted instead (fail-closed on unparseable input).
+    public var selfieExposedKeys: Set<String>? {
+        var keys: Set<String> = ["method", "verbose", "standardType", "timeout", "cache"]
+        if Request.isCredentialFreeURLComponent(self.baseURL) { keys.insert("baseURL") }
+        if Request.isCredentialFreeURLComponent(self.endpoint) { keys.insert("endpoint") }
+        return keys
+    }
+
+    /// `true` when `string` parses as a URL (or URL fragment) with no userinfo,
+    /// query or fragment — nowhere a secret could hide. Input that fails to parse
+    /// (rare — `URLComponents` is lenient) is treated as unsafe and redacted.
+    private static func isCredentialFreeURLComponent(_ string: String) -> Bool {
+        guard let components = URLComponents(string: string) else { return false }
+        return components.user == nil
+            && components.password == nil
+            && components.query == nil
+            && components.fragment == nil
+    }
+}
