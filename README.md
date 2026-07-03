@@ -1,10 +1,20 @@
 # GIGLibrary iOS
 
 ----
-![Language](https://img.shields.io/badge/Language-Swift-orange.svg)
+![Swift](https://img.shields.io/badge/Swift-6.2-orange.svg)
+![Platform](https://img.shields.io/badge/Platform-iOS%2016%2B-blue.svg)
+![SPM](https://img.shields.io/badge/SPM-compatible-brightgreen.svg)
 
 
 Main library for Gigigo iOS projects.
+
+## Requirements
+
+- iOS 16.0+
+- Swift 6.2 (the package builds in Swift 6 language mode with strict concurrency)
+- Swift Package Manager (CocoaPods and Carthage are not supported)
+
+See [CHANGELOG.md](CHANGELOG.md) for release history and migration notes.
 
 
 ## How to add it to my project
@@ -13,7 +23,7 @@ Main library for Gigigo iOS projects.
 
 ```swift
 dependencies: [
-.package(url: "https://github.com/gigigoapps/gigigo-swift-lib.git", .upToNextMajor(from: "0.1.0"))
+    .package(url: "https://github.com/gigigoapps/gigigo-swift-lib.git", .upToNextMajor(from: "3.0.0"))
 ]
 ```
 
