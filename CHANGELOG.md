@@ -29,8 +29,10 @@ protection failure, every data race, and dozens of UIKit/networking bugs.
   silent no-op: every item was stored with the OS default accessibility,
   ignoring `whenPasscodeSetThisDeviceOnly`, `biometryAny`, etc. Items are now
   stored with the configured `kSecAttrAccessible` value, and an authentication
-  policy produces a proper `SecAccessControl`. Changing the protection of an
-  existing key safely recreates the item without data loss.
+  policy produces a proper `SecAccessControl`. Adding an authentication policy
+  to an existing, still-unprotected key safely recreates the item (the readable
+  value is backed up first — no data loss); other protection changes update the
+  item in place, and already policy-gated items are never recreated.
   **Action required:** if you stored sensitive data relying on those options,
   verify the effective protection after upgrading.
 - **Logs no longer leak sensitive data in production.** Logging migrated from
@@ -83,8 +85,10 @@ protection failure, every data race, and dozens of UIKit/networking bugs.
 - Requests automatically add an `Accept: application/json` header (and
   `Content-Type: application/json` on non-GET requests) unless already present.
 - HTTP status `300` (Multiple Choices) is no longer treated as `.success`;
-  the success range is `200..<300`. On non-2xx responses the HTTP status takes
-  precedence over the Gigigo envelope.
+  the success range is `200..<300`. A non-2xx response whose body did not
+  already map to a specific error (e.g. `.apiError`, `.sessionExpired`) now
+  reports the HTTP error instead of `.success`/`.unknownError`; an error
+  status parsed from the Gigigo envelope is preserved.
 - `Request` URL building is normalized: `baseURL` and `endpoint` are joined
   with exactly one `/` (no more `/v1items` or `//`), and query parameters are
   encoded by type — arrays expand to repeated items, booleans render as
@@ -159,9 +163,10 @@ protection failure, every data race, and dozens of UIKit/networking bugs.
 - `Request` improvements: `Encodable` body support
   (`init(method:baseUrl:endpoint:body:)` using `JSONEncoder`), JSON-array
   bodies via `bodyParamsArray`, and the `HTTPMethod` enum.
-- Injectable network logging: the `NetworkLogManaging` protocol (with
-  `RequestLogFormatter`/`ResponseLogFormatter`) lets tests and consumers
-  capture or route request/response logs; both protocols are `Sendable`.
+- Internal: an injectable network-logging seam (`NetworkLogManaging` plus pure
+  request/response log formatters, all `Sendable`) used by the test suite to
+  assert request/response logging. The consumer-facing hook remains the public
+  `RequestLogInfo` protocol and its `@Sendable` handler.
 - `ImageDownloader` configuration: `maxConcurrentDownloads` (bounded parallel
   downloads with a pending queue) and `maxCachedImages` (cache bound).
 - `StyledButton` — a `UIButton` subclass with a state-aware disabled background
@@ -175,8 +180,6 @@ protection failure, every data race, and dozens of UIKit/networking bugs.
   values, with or without a leading `#`.
 - `ErrorDate.invalidDate` case (thrown when a date cannot be rebuilt);
   `ErrorDate` is now `Equatable`.
-- `Locale.languageCode(from:)` / `Locale.regionCode(from:)` — pure, testable
-  BCP-47 parsers backed by the typed `Locale` API.
 - Tooling: GitHub Actions CI (build + tests on iOS Simulator) and a strict
   SwiftLint configuration (0 violations).
 - Extensive new test coverage (Swift Testing + integration tests over a mocked
