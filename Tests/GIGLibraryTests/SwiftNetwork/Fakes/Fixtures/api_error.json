@@ -1,0 +1,7 @@
+{
+  "status": false,
+  "error": {
+    "code": 15000,
+    "message": "Invalid token"
+  }
+}
