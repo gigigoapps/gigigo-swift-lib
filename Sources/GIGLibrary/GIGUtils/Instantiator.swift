@@ -34,7 +34,6 @@ public extension Instantiable {
      - throws: An error of type ErrorInstantiation
      - returns: A ViewController object (already downcasted)
      - Author: Alejandro Jiménez
-     - Version: 2.1.4
      - Since: 1.2.1
      */
     

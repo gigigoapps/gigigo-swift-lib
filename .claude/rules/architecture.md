@@ -6,6 +6,8 @@
 Sources/GIGLibrary/
 ├── SwiftNetwork/
 │   ├── Request.swift
+│   ├── Request+Cancellation.swift
+│   ├── Request+URLBuilding.swift
 │   ├── Response.swift
 │   ├── FetchDecodableError.swift
 │   ├── ReachabilityWrapper.swift
@@ -24,23 +26,22 @@ Sources/GIGLibrary/
     ├── Bundle/
     ├── Color/
     ├── CoreData/
-    ├── Date/
+    ├── Date/                   # Date+GIGExtension.swift
     ├── Dispatch.swift
     ├── Error/
-    ├── GIGIOSVersion.swift
-    ├── Image/
+    ├── Image/                  # ImageDownloader, ImageDownloaderConfiguration, UIImage+Extension
     ├── InfoPlist.swift
     ├── Instantiator.swift
     ├── Keyboard/
-    ├── Locale/
+    ├── Locale/                 # Locale+GIGExtension.swift
     ├── Log/
     ├── MultiDelegable.swift
     ├── QRGenerator/
     ├── Selfie.swift
-    ├── Storyboard/
     ├── String/
     ├── Style/
     │   ├── Stylable.swift
+    │   ├── StyledButton.swift
     │   ├── StylableExtensions/   # UIButton, UILabel, UITextField, UITextView, UIView, UIString
     │   ├── Styles/               # ButtonStyle, LabelStyle, TextFieldStyle, TextViewStyle, ViewStyle, TextStyle
     │   └── UIKitExtensions/
@@ -51,7 +52,10 @@ Sources/GIGLibrary/
     └── View/
 
 Tests/GIGLibraryTests/
-├── GIGUtils/                   # Date, JSON, Style, StyledString tests
+├── GIGUtils/                   # one suite per utility (Date, Locale, Color, JSON, Style,
+│                               # StyledString, String, Image, Keyboard, MultiDelegable,
+│                               # QRGenerator, Selfie, InfoPlist, CoreData, Log, …)
+├── KeychainStore/              # KeychainStore, KeychainOptions, accessibility, Status
 └── SwiftNetwork/
     ├── Fakes/
     │   ├── Fixtures/            # JSON fixtures (SPM resource bundle)
@@ -61,6 +65,7 @@ Tests/GIGLibraryTests/
     │   ├── NetworkLogManagerSpy.swift
     │   └── RequestMocks.swift
     ├── IntegrationTests.swift
+    ├── ReachabilityWrapperTests.swift
     ├── RequestTests.swift
     ├── ResponseTests.swift
     └── TestModels.swift
