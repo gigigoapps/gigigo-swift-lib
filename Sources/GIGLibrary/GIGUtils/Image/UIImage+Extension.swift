@@ -122,8 +122,12 @@ extension UIImage {
         }
     }
     
+    /// Returns nil when the animation exceeds 20 MiB of input, 200 source frames,
+    /// 4096 pixels per dimension, 64 MiB of estimated pixel storage, 2000 expanded
+    /// frames or ten minutes. Limits apply equally to network, file and bundled input.
     public class func gif(data: Data) -> UIImage? {
-        // Create source from data
+        // Bound compressed input before ImageIO parses it. Oversized GIFs fail as a whole.
+        guard data.count <= 20 * 1024 * 1024 else { return nil }
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
             LogWarn("Source for the image does not exist")
             return nil
@@ -241,35 +245,19 @@ extension UIImage {
     // MARK: - Private Helpers
     
     internal class func delayForImageAtIndex(_ index: Int, source: CGImageSource) -> Double {
-        var delay = 0.1
-        // Get dictionaries
-        let cfProperties = CGImageSourceCopyPropertiesAtIndex(source, index, nil)
-        let gifPropertiesPointer = UnsafeMutablePointer<UnsafeRawPointer?>.allocate(capacity: 0)
-        if CFDictionaryGetValueIfPresent(
-            cfProperties,
-            Unmanaged.passUnretained(kCGImagePropertyGIFDictionary).toOpaque(),
-            gifPropertiesPointer
-        ) == false {
-            return delay
+        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [String: Any],
+              let gif = properties[kCGImagePropertyGIFDictionary as String] as? [String: Any] else {
+            return 0.1
         }
-        let gifProperties: CFDictionary = unsafeBitCast(gifPropertiesPointer.pointee, to: CFDictionary.self)
-        // Get delay time
-        var delayObject: AnyObject = unsafeBitCast(
-            CFDictionaryGetValue(
-                gifProperties,
-                Unmanaged.passUnretained(kCGImagePropertyGIFUnclampedDelayTime).toOpaque()),
-            to: AnyObject.self)
-        if delayObject.doubleValue == 0 {
-            delayObject = unsafeBitCast(CFDictionaryGetValue(
-                gifProperties,
-                Unmanaged.passUnretained(kCGImagePropertyGIFDelayTime).toOpaque()),
-                                        to: AnyObject.self)
+        let unclamped = (gif[kCGImagePropertyGIFUnclampedDelayTime as String] as? NSNumber)?.doubleValue
+        let clamped = (gif[kCGImagePropertyGIFDelayTime as String] as? NSNumber)?.doubleValue
+        let delay: Double
+        if let unclamped, unclamped != 0 {
+            delay = unclamped
+        } else {
+            delay = clamped ?? 0.1
         }
-        delay = delayObject as? Double ?? 0
-        if delay < 0.1 {
-            delay = 0.1 // Make sure they're not too fast
-        }
-        return delay
+        return max(0.1, delay)
     }
     
     internal class func gcdForPair(_ aVar: Int?, _ bVar: Int?) -> Int {
@@ -301,49 +289,83 @@ extension UIImage {
     }
     
     internal class func animatedImageWithSource(_ source: CGImageSource) -> UIImage? {
-        let count = CGImageSourceGetCount(source)
-        var images = [CGImage]()
-        var delays = [Int]()
-        // Fill arrays. Keep `images` and `delays` aligned: a frame that fails to decode is skipped
-        // entirely instead of appending a delay without an image. Otherwise a partially corrupt GIF
-        // desyncs the arrays and the frame loop below traps on `images[i]` out of range — a path now
-        // reachable from untrusted network data via `Response.image()`.
-        for i in 0..<count {
-            // Add image
-            guard let image = CGImageSourceCreateImageAtIndex(source, i, nil) else { continue }
-            images.append(image)
-            // At it's delay in cs
-            let delaySeconds = UIImage.delayForImageAtIndex(Int(i),
-                                                            source: source)
-            delays.append(Int(delaySeconds * 1000.0)) // Seconds to ms
-        }
-        guard !images.isEmpty else { return nil }
-        // Calculate full duration
-        let duration: Int = {
-            var sum = 0
-
-            for val: Int in delays {
-                sum += val
-            }
-
-            return sum
-        }()
-        // Get frames
+        guard let delays = boundedGIFDelays(source) else { return nil }
+        let duration = delays.reduce(0, +)
+        guard duration <= 600_000 else { return nil }
         let gcd = gcdForArray(delays)
-        var frames = [UIImage]()
-        var frame: UIImage
-        var frameCount: Int
-        for i in 0..<images.count {
-            frame = UIImage(cgImage: images[i])
-            frameCount = Int(delays[i] / gcd)
+        let expandedCount = delays.reduce(0) { $0 + $1 / gcd }
+        guard expandedCount <= 2_000 else { return nil }
 
-            for _ in 0..<frameCount {
+        var frames = [UIImage]()
+        frames.reserveCapacity(expandedCount)
+        var decodedDuration = 0
+        var decodedBytes = 0
+        for index in delays.indices {
+            // Preserve the existing behavior of skipping an undecodable frame.
+            guard let image = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
+            guard image.width <= 4096, image.height <= 4096,
+                  image.bytesPerRow <= 4096 * 8 else { return nil }
+            decodedBytes += image.bytesPerRow * image.height
+            guard decodedBytes <= 64 * 1024 * 1024 else { return nil }
+            let frame = UIImage(cgImage: image)
+            for _ in 0..<(delays[index] / gcd) {
                 frames.append(frame)
             }
+            decodedDuration += delays[index]
         }
-        return UIImage.animatedImage(
-            with: frames,
-            duration: Double(duration) / 1000.0)
+        guard !frames.isEmpty else { return nil }
+        return UIImage.animatedImage(with: frames, duration: Double(decodedDuration) / 1000)
+    }
+
+    private class func boundedGIFDelays(_ source: CGImageSource) -> [Int]? {
+        // Preflight all metadata before decoding: limits bound both pixel storage and the
+        // repeated references used to preserve unequal frame delays. No partial animation on failure.
+        let count = CGImageSourceGetCount(source)
+        guard count > 0, count <= 200,
+              let canvas = CGImageSourceCopyProperties(source, nil) as? [String: Any],
+              let canvasSize = boundedGIFCanvasSize(canvas, source: source) else { return nil }
+        var delays = [Int]()
+        var estimatedBytes = 0
+        for index in 0..<count {
+            guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [String: Any],
+                  let size = boundedGIFSize(properties) else { return nil }
+            // ImageIO can composite a subframe onto the logical canvas; account for both.
+            estimatedBytes += max(canvasSize.width, size.width) * max(canvasSize.height, size.height) * 8
+            guard estimatedBytes <= 64 * 1024 * 1024 else { return nil }
+            let delay = delayForImageAtIndex(index, source: source)
+            guard delay.isFinite, delay >= 0.1, delay <= 600 else { return nil }
+            delays.append(Int(delay * 1000))
+        }
+        return delays
+    }
+
+    private class func boundedGIFCanvasSize(
+        _ properties: [String: Any],
+        source: CGImageSource
+    ) -> (width: Int, height: Int)? {
+        if let gif = properties[kCGImagePropertyGIFDictionary as String] as? [String: Any] {
+            // GIF logical canvas dimensions live in the format dictionary, not at the top level.
+            guard let width = gif[kCGImagePropertyGIFCanvasPixelWidth as String],
+                  let height = gif[kCGImagePropertyGIFCanvasPixelHeight as String] else { return nil }
+            return boundedGIFSize([
+                kCGImagePropertyPixelWidth as String: width,
+                kCGImagePropertyPixelHeight as String: height
+            ])
+        }
+        // Preserve decoding of other ImageIO formats passed to this legacy API (e.g. a PNG
+        // served at a .gif URL). Their dimensions may only be available on the first frame.
+        if let size = boundedGIFSize(properties) { return size }
+        guard let frame = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] else { return nil }
+        return boundedGIFSize(frame)
+    }
+
+    private class func boundedGIFSize(_ properties: [String: Any]) -> (width: Int, height: Int)? {
+        guard let width = (properties[kCGImagePropertyPixelWidth as String] as? NSNumber)?.doubleValue,
+              let height = (properties[kCGImagePropertyPixelHeight as String] as? NSNumber)?.doubleValue,
+              width.isFinite, height.isFinite,
+              width >= 1, height >= 1, width <= 4096, height <= 4096,
+              width.rounded(.down) == width, height.rounded(.down) == height else { return nil }
+        return (Int(width), Int(height))
     }
     
     

@@ -10,6 +10,59 @@ import UIKit
 @Suite("UIImage+Extension")
 struct UIImageExtensionTests {
 
+    @Test("Given a GIF over its resource budget, when decoded, then the whole animation is rejected",
+          arguments: ["bytes", "count", "dimensions", "memory", "cumulativeMemory", "duration", "expansion"])
+    func rejectsGIFOverBudget(kind: String) {
+        let data: Data
+        switch kind {
+        case "bytes": data = Data(repeating: 0, count: 20 * 1024 * 1024 + 1)
+        case "count": data = budgetGIF(delays: Array(repeating: 10, count: 201))
+        case "dimensions": data = budgetGIF(width: 4097, height: 1, delays: [10])
+        case "memory": data = budgetGIF(width: 4096, height: 4096, delays: [10])
+        case "cumulativeMemory": data = budgetGIF(width: 2048, height: 2048, delays: [10, 10, 10])
+        case "duration": data = budgetGIF(delays: [30000, 30001])
+        default: data = budgetGIF(delays: [10, 19999])
+        }
+        #expect(UIImage.gif(data: data) == nil)
+    }
+
+    @Test("Given ordinary unequal GIF delays, when decoded, then animation and duration are preserved")
+    func preservesGIFTiming() throws {
+        let image = try #require(UIImage.gif(data: budgetGIF(delays: [10, 20])))
+        #expect(image.images?.count == 3)
+        #expect(abs(image.duration - 0.3) < 0.0001)
+    }
+
+    @Test("Given a GIF without delay metadata, when decoded, then it uses the default delay")
+    func gifWithoutDelay() throws {
+        let image = try #require(UIImage.gif(data: budgetGIF(delays: [10], includeDelay: false)))
+        #expect(image.images?.count == 1)
+        #expect(abs(image.duration - 0.1) < 0.0001)
+    }
+
+    @Test("Given a GIF at the source-frame limit, when decoded, then it stays animated")
+    func gifAtFrameLimit() throws {
+        let image = try #require(UIImage.gif(data: budgetGIF(delays: Array(repeating: 10, count: 200))))
+        #expect(image.images?.count == 200)
+        #expect(abs(image.duration - 20) < 0.0001)
+    }
+
+    private func budgetGIF(width: UInt16 = 1, height: UInt16 = 1,
+                           delays: [UInt16], includeDelay: Bool = true) -> Data {
+        // Tiny valid image blocks with independently controlled logical canvas and delays.
+        var bytes = Array("GIF89a".utf8)
+        bytes += [UInt8(width & 255), UInt8(width >> 8), UInt8(height & 255), UInt8(height >> 8),
+                  0x80, 0, 0, 0, 0, 0, 255, 255, 255]
+        for delay in delays {
+            if includeDelay {
+                bytes += [0x21, 0xF9, 4, 1, UInt8(delay & 255), UInt8(delay >> 8), 0, 0]
+            }
+            bytes += [0x2C, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 1, 0x44, 0]
+        }
+        bytes += [0x3B]
+        return Data(bytes)
+    }
+
     // MARK: - imageProportionally guards
 
     /// Confirms the nil→self wiring end-to-end: when `aspectFillSize` rejects the size, the original
