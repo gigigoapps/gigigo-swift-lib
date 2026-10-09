@@ -289,6 +289,35 @@ extension UIImage {
     }
     
     internal class func animatedImageWithSource(_ source: CGImageSource) -> UIImage? {
+        guard let delays = boundedGIFDelays(source) else { return nil }
+        let duration = delays.reduce(0, +)
+        guard duration <= 600_000 else { return nil }
+        let gcd = gcdForArray(delays)
+        let expandedCount = delays.reduce(0) { $0 + $1 / gcd }
+        guard expandedCount <= 2_000 else { return nil }
+
+        var frames = [UIImage]()
+        frames.reserveCapacity(expandedCount)
+        var decodedDuration = 0
+        var decodedBytes = 0
+        for index in delays.indices {
+            // Preserve the existing behavior of skipping an undecodable frame.
+            guard let image = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
+            guard image.width <= 4096, image.height <= 4096,
+                  image.bytesPerRow <= 4096 * 8 else { return nil }
+            decodedBytes += image.bytesPerRow * image.height
+            guard decodedBytes <= 64 * 1024 * 1024 else { return nil }
+            let frame = UIImage(cgImage: image)
+            for _ in 0..<(delays[index] / gcd) {
+                frames.append(frame)
+            }
+            decodedDuration += delays[index]
+        }
+        guard !frames.isEmpty else { return nil }
+        return UIImage.animatedImage(with: frames, duration: Double(decodedDuration) / 1000)
+    }
+
+    private class func boundedGIFDelays(_ source: CGImageSource) -> [Int]? {
         // Preflight all metadata before decoding: limits bound both pixel storage and the
         // repeated references used to preserve unequal frame delays. No partial animation on failure.
         let count = CGImageSourceGetCount(source)
@@ -307,35 +336,13 @@ extension UIImage {
             guard delay.isFinite, delay >= 0.1, delay <= 600 else { return nil }
             delays.append(Int(delay * 1000))
         }
-        let duration = delays.reduce(0, +)
-        guard duration <= 600_000 else { return nil }
-        let gcd = gcdForArray(delays)
-        let expandedCount = delays.reduce(0) { $0 + $1 / gcd }
-        guard expandedCount <= 2_000 else { return nil }
-
-        var frames = [UIImage]()
-        frames.reserveCapacity(expandedCount)
-        var decodedDuration = 0
-        var decodedBytes = 0
-        for index in 0..<count {
-            // Preserve the existing behavior of skipping an undecodable frame.
-            guard let image = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
-            guard image.width <= 4096, image.height <= 4096,
-                  image.bytesPerRow <= 4096 * 8 else { return nil }
-            decodedBytes += image.bytesPerRow * image.height
-            guard decodedBytes <= 64 * 1024 * 1024 else { return nil }
-            let frame = UIImage(cgImage: image)
-            for _ in 0..<(delays[index] / gcd) {
-                frames.append(frame)
-            }
-            decodedDuration += delays[index]
-        }
-        guard !frames.isEmpty else { return nil }
-        return UIImage.animatedImage(with: frames, duration: Double(decodedDuration) / 1000)
+        return delays
     }
 
-    private class func boundedGIFCanvasSize(_ properties: [String: Any],
-                                            source: CGImageSource) -> (width: Int, height: Int)? {
+    private class func boundedGIFCanvasSize(
+        _ properties: [String: Any],
+        source: CGImageSource
+    ) -> (width: Int, height: Int)? {
         if let gif = properties[kCGImagePropertyGIFDictionary as String] as? [String: Any] {
             // GIF logical canvas dimensions live in the format dictionary, not at the top level.
             guard let width = gif[kCGImagePropertyGIFCanvasPixelWidth as String],
