@@ -139,6 +139,31 @@ struct UIImageExtensionTests {
         #expect(result?.scale == UIGraphicsImageRendererFormat.default().scale)
     }
 
+    @Test("Given an extreme aspect ratio, when resized, then no amplified bitmap is allocated",
+          arguments: [CGSize(width: 1, height: 4096), CGSize(width: 4096, height: 1)], [CGFloat(1), 2, 3])
+    func extremeAspectRatioReturnsOriginal(size: CGSize, scale: CGFloat) throws {
+        let original = makeImage(size: size)
+        let cgImage = try #require(original.cgImage)
+        let source = UIImage(cgImage: cgImage, scale: scale, orientation: .up)
+        #expect(source.imageProportionally(with: CGSize(width: 100, height: 100)) === source)
+    }
+
+    @Test("Given an oversized finite target, when resized, then the original image is preserved")
+    func oversizedTargetReturnsOriginal() {
+        let source = makeImage(size: CGSize(width: 10, height: 10))
+        #expect(source.imageProportionally(with: CGSize(width: 100000, height: 100000)) === source)
+    }
+
+    @Test("Given render dimensions, when checking the budget, then backing scale and rounded pixels are bounded",
+          arguments: [CGFloat(1), 2, 3])
+    func resizeBudgetIncludesScale(scale: CGFloat) {
+        #expect(UIImage.isWithinResizeBudget(size: CGSize(width: 100, height: 200), scale: scale))
+        #expect(!UIImage.isWithinResizeBudget(size: CGSize(width: 3000, height: 3000), scale: scale))
+        #expect(!UIImage.isWithinResizeBudget(size: CGSize(width: 1, height: 4097), scale: scale))
+        #expect(UIImage.isWithinResizeBudget(size: CGSize(width: 2048 / scale, height: 4096 / scale), scale: scale))
+        #expect(!UIImage.isWithinResizeBudget(size: CGSize(width: 2048.1 / scale, height: 4096 / scale), scale: scale))
+    }
+
     // MARK: - aspectFillSize (pure size math)
 
     @Test("Given a finite source and target, when computing the aspect-fill size, then it scales by the larger ratio")
