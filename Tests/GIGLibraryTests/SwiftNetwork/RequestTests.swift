@@ -4,6 +4,59 @@ import Testing
 
 @Suite(.serialized)
 struct RequestTests {
+    @Test("Given a large bounded body, when received in chunks, then all bytes are preserved")
+    func boundedResponsePreservesLargeBody() async {
+        let body = Data(repeating: 65, count: 4 * 1024 * 1024)
+        MockURLProtocol.respond(path: "/bounded-large", data: body)
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: "/bounded-large", standard: .basic)
+        request.maximumResponseBytes = body.count
+        let response = await request.fetch()
+        #expect(response.status == .success)
+        #expect(response.body == body)
+    }
+
+    @Test("Given an in-flight bounded request, when cancelled, then reception stops with a cancelled response",
+          arguments: [false, true])
+    func boundedResponseCanBeCancelled(viaRequest: Bool) async throws {
+        var startContinuation: AsyncStream<Void>.Continuation?
+        let started = AsyncStream<Void> { startContinuation = $0 }
+        let signal = try #require(startContinuation)
+        defer { signal.finish() }
+        MockURLProtocol.respond(path: "/bounded-cancel", data: Data("image".utf8), delay: 10) { _ in
+            signal.yield(())
+        }
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: "/bounded-cancel")
+        request.maximumResponseBytes = 8
+        let task = Task { await request.fetch() }
+        for await _ in started { break }
+        if viaRequest { request.cancel() } else { task.cancel() }
+        let response = await task.value
+        #expect(response.error?.code == URLError.cancelled.rawValue)
+    }
+
+    @Test("Given a download cache policy, when saving a file, then both the request and session honor it",
+          arguments: [NSURLRequest.CachePolicy.useProtocolCachePolicy, .reloadIgnoringLocalCacheData])
+    func downloadUsesConfiguredCachePolicy(policy: NSURLRequest.CachePolicy) async throws {
+        let configuration = URLSessionConfiguration.testConfiguration()
+        configuration.urlCache = URLCache(memoryCapacity: 1024, diskCapacity: 0)
+        var capturedPolicy: URLRequest.CachePolicy?
+        let body = Data("fresh file".utf8)
+        MockURLProtocol.respond(path: "/download-cache-policy", data: body) { request in
+            capturedPolicy = request.cachePolicy
+        }
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: "/download-cache-policy",
+                                          sessionConfiguration: configuration)
+        request.cache = policy
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: destination) }
+        let response = await request.fetch(downloadTo: destination)
+        #expect(response.status == .success)
+        #expect(capturedPolicy == policy)
+        #expect(configuration.requestCachePolicy == policy)
+        #expect((configuration.urlCache == nil) == (policy == .reloadIgnoringLocalCacheData))
+        #expect(try Data(contentsOf: destination) == body)
+    }
+
     @Test("Given a bounded image request, when actual bytes exceed its budget, then it fails even without an accurate length",
           arguments: [nil, "1", "100000"] as [String?])
     func boundedResponseRejectsOverflow(contentLength: String?) async {
@@ -945,8 +998,9 @@ struct RequestTests {
         #expect(didReceiveRequest == false)
     }
 
-    @Test("Given a caller-injected URLSession, when fetch is called more than once, then the session is not invalidated and every call succeeds")
-    func fetchDoesNotInvalidateInjectedSession() async {
+    @Test("Given a caller-injected URLSession, when fetch is called more than once, then the session is not invalidated and every call succeeds",
+          arguments: [false, true])
+    func fetchDoesNotInvalidateInjectedSession(bounded: Bool) async {
         // Given a caller-owned session (C060: the fetch flow must not finishTasksAndInvalidate it,
         // unlike the sessions it creates internally from a sessionConfiguration).
         MockURLProtocol.respond(path: "/injected-session") { _ in }
@@ -962,6 +1016,8 @@ struct RequestTests {
             session: session,
             reachability: MockReachabilityProvider(reachable: true)
         )
+
+        request.maximumResponseBytes = bounded ? 8 : nil
 
         // When the same caller-owned session is reused across two fetches
         let first = await request.fetch()
