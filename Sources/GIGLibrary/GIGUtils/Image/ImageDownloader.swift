@@ -131,6 +131,8 @@ struct ImageDownloader {
         #else
         let request = Request(method: .get, baseUrl: url, endpoint: "", bodyParams: nil)
         #endif
+        // Bound encoded bytes during reception for every remote image format, before decoding.
+        request.maximumResponseBytes = 20 * 1024 * 1024
         ImageDownloader.queue[view] = PendingDownload(request: request, url: url)
         // Drop any stale pending entry for this view before re-enqueuing it, so a view that was
         // re-requested while still queued (e.g. a reused cell) is never started more than once.
