@@ -4,6 +4,41 @@ import Testing
 
 @Suite(.serialized)
 struct RequestTests {
+    @Test("Given a bounded image request, when actual bytes exceed its budget, then it fails even without an accurate length",
+          arguments: [nil, "1", "100000"] as [String?])
+    func boundedResponseRejectsOverflow(contentLength: String?) async {
+        let path = "/bounded-overflow-" + (contentLength ?? "unknown")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [UnfinishedImageURLProtocol.self]
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: path,
+                                          timeout: 2, sessionConfiguration: configuration)
+        request.maximumResponseBytes = 32768
+        let response = await request.fetch()
+        #expect(response.error?.code == URLError.Code.dataLengthExceedsMaximum.rawValue)
+        #expect(response.status != .success)
+    }
+
+    @Test("Given a bounded request, when the body reaches exactly the budget, then all bytes are returned")
+    func boundedResponsePreservesBodyAtLimit() async {
+        let body = Data(repeating: 65, count: 8)
+        MockURLProtocol.respond(path: "/bounded-exact", data: body)
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: "/bounded-exact", standard: .basic)
+        request.maximumResponseBytes = 8
+        let response = await request.fetch()
+        #expect(response.status == .success)
+        #expect(response.body == body)
+    }
+
+    @Test("Given a generic request, when no image budget is selected, then the body remains unrestricted")
+    func genericResponseRemainsUnbounded() async {
+        let body = Data(repeating: 65, count: 32)
+        MockURLProtocol.respond(path: "/unbounded-control", data: body)
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: "/unbounded-control", standard: .basic)
+        let response = await request.fetch()
+        #expect(response.status == .success)
+        #expect(response.body == body)
+    }
+
     @Test("Given a POST request with body params, when fetch is called, then URL, headers, and body are built correctly")
     func fetchBuildsRequestWithBodyParams() async throws {
         // Given
@@ -937,4 +972,23 @@ struct RequestTests {
         #expect(first.status == .success)
         #expect(second.status == .success)
     }
+}
+
+// Deliberately never completes the response: the client must reject while reception is ongoing.
+private final class UnfinishedImageURLProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let length = request.url!.lastPathComponent.replacingOccurrences(of: "bounded-overflow-", with: "")
+        var headers = ["Content-Type": "application/octet-stream"]
+        if length != "unknown" { headers["Content-Length"] = length }
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: headers)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        // Cross Foundation's initial transport buffer without finishing the response.
+        client?.urlProtocol(self, didLoad: Data(repeating: 65, count: 32768))
+        client?.urlProtocol(self, didLoad: Data(repeating: 65, count: 32769))
+    }
+
+    override func stopLoading() {}
 }
