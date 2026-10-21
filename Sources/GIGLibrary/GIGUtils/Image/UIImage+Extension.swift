@@ -208,10 +208,29 @@ extension UIImage {
         // `UIGraphicsImageRenderer` replaces the deprecated UIGraphics* context API. It does not
         // require the main actor (the `ImageDownloader` caller runs the resize on a detached task),
         // and its default format uses the device screen scale, matching the previous `scale: 0.0`.
-        let renderer = UIGraphicsImageRenderer(size: newSize)
+        let format = UIGraphicsImageRendererFormat.default()
+        // Check the actual backing pixels before allocating. Keep the original image on budget
+        // overflow, just as for degenerate sizes; do not change normal aspect-fill dimensions.
+        guard UIImage.isWithinResizeBudget(size: newSize, scale: format.scale) else {
+            return self
+        }
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
         return renderer.image { _ in
             self.draw(in: CGRect(origin: .zero, size: newSize))
         }
+    }
+
+    /// Cap each backing dimension and reserve eight bytes per pixel (including extended-range
+    /// formats) within 64 MiB. Round up fractional pixels before checking the allocation budget.
+    static func isWithinResizeBudget(size: CGSize, scale: CGFloat) -> Bool {
+        guard scale.isFinite, scale > 0,
+              size.width.isFinite, size.width > 0,
+              size.height.isFinite, size.height > 0 else { return false }
+        let width = ceil(size.width * scale)
+        let height = ceil(size.height * scale)
+        guard width.isFinite, height.isFinite,
+              width <= 4096, height <= 4096 else { return false }
+        return width * height <= (64 * 1024 * 1024) / 8
     }
 
     /// Computes the aspect-fill size that scales `source` to cover `target`, or `nil` when the
