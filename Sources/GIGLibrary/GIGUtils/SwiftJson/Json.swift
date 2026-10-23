@@ -56,7 +56,7 @@ public final class JSON: Sequence, CustomStringConvertible {
 	}
     
     public subscript(index: Int) -> JSON? {
-        guard let array = self.json as? [Any], array.count > index else { return nil }
+        guard let array = self.json as? [Any], array.indices.contains(index) else { return nil }
         
         return JSON(from: array[index])
     }
