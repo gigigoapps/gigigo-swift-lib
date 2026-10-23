@@ -16,6 +16,16 @@ import Security
 @Suite("KeychainOptions attribute building")
 struct KeychainOptionsTests {
 
+    @Test("Given any store configuration, when described, then diagnostics reveal no configuration or contents")
+    func storeDiagnosticsAreRedacted() {
+        let marker = "sensitive-configuration-\(UUID().uuidString)"
+        let store = KeychainStore(service: marker)
+        #expect(store.description == "KeychainStore(<redacted>)")
+        #expect(store.debugDescription == store.description)
+        #expect("\(store)" == store.description)
+        #expect(String(reflecting: store) == store.description)
+    }
+
     private func makeOptions(
         accessibility: KeychainAccessibility,
         authenticationPolicy: KeychainAuthenticationPolicy? = nil,

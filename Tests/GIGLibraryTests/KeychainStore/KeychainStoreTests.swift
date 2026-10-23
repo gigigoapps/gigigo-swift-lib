@@ -30,6 +30,23 @@ struct KeychainStoreTests {
         KeychainStore(service: "com.gigigo.tests.keychainstore.\(UUID().uuidString)")
     }
 
+    @Test("Given stored secrets, when described, then diagnostics omit values and explicit reads still work")
+    func descriptionsDoNotExposeSecrets() throws {
+        let store = makeStore()
+        defer { try? store.removeAll() }
+        let token = "private-token-\(UUID().uuidString)"
+        let bytes = Data([0xFF, 0xFE, 0xAB, 0xCD])
+        try store.set(token, key: "token")
+        try store.set(bytes, key: "binary")
+
+        #expect(String(describing: store) == "KeychainStore(<redacted>)")
+        #expect(String(reflecting: store) == "KeychainStore(<redacted>)")
+        #expect(try store.getString("token") == token)
+        #expect(try store.getData("binary") == bytes)
+        #expect(store.allItems().contains { $0["value"] as? String == token })
+        #expect(store.allItems().contains { $0["value"] as? Data == bytes })
+    }
+
     // MARK: - set / get round-trip
 
     @Test("Given a stored string, when read back, then it round-trips")
