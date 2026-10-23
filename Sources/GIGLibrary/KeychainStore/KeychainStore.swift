@@ -569,22 +569,13 @@ public final class KeychainStore {
 
 extension KeychainStore: CustomStringConvertible, CustomDebugStringConvertible {
     
+    // Diagnostics must not query or expose keychain contents. Use explicit read APIs instead.
     public var description: String {
-        let items = allItems()
-        if items.isEmpty {
-            return "[]"
-        }
-        var description = "[\n"
-        for item in items {
-            description += "  "
-            description += "\(item)\n"
-        }
-        description += "]"
-        return description
+        return "KeychainStore(<redacted>)"
     }
 
     public var debugDescription: String {
-        return "\(items())"
+        return description
     }
 }
 
