@@ -1,4 +1,7 @@
 import Foundation
+import ImageIO
+import UIKit
+import UniformTypeIdentifiers
 import Testing
 @testable import GIGLibrary
 
@@ -399,6 +402,70 @@ struct ResponseTests {
         assertThrowsResponseError(.unexpectedDataType) {
             _ = try response.image(scale: 1)
         }
+    }
+
+    @Test("Given oversized compressed PNG or JPEG pixels, when decoded, then the response rejects them",
+          arguments: [UTType.png.identifier, UTType.jpeg.identifier], [CGSize(width: 4097, height: 1), CGSize(width: 3000, height: 3000)])
+    func imageRejectsExcessivePixels(type: String, size: CGSize) throws {
+        let data = try encodedImage(size: size, type: type)
+        #expect(data.count < 20 * 1024 * 1024)
+        let url = try #require(URL(string: "https://example.com/image"))
+        let response = makeImageResponse(body: data, url: url)
+
+        assertThrowsResponseError(.unexpectedDataType) {
+            _ = try response.image(scale: 2)
+        }
+    }
+
+    @Test("Given a later oversized TIFF page, when decoded, then the whole response is rejected")
+    func imageRejectsOversizedLaterPage() throws {
+        let data = try encodedImage(size: CGSize(width: 4097, height: 1), type: UTType.tiff.identifier, smallFirstPage: true)
+        let url = try #require(URL(string: "https://example.com/image.tiff"))
+        let response = makeImageResponse(body: data, url: url)
+
+        assertThrowsResponseError(.unexpectedDataType) {
+            _ = try response.image(scale: 1)
+        }
+    }
+
+    @Test("Given a normal PNG or oriented JPEG, when decoded, then pixels, scale and orientation remain intact",
+          arguments: [UTType.png.identifier, UTType.jpeg.identifier])
+    func imagePreservesOrdinaryStaticImage(type: String) throws {
+        let data = try encodedImage(size: CGSize(width: 24, height: 16), type: type, orientation: 6)
+        let reference = try #require(UIImage(data: data, scale: 2))
+        let url = try #require(URL(string: "https://example.com/image"))
+        let image = try makeImageResponse(body: data, url: url).image(scale: 2)
+
+        #expect(image.size == reference.size)
+        #expect(image.scale == 2)
+        #expect(image.imageOrientation == reference.imageOrientation)
+        #expect(image.cgImage?.width == 24)
+        #expect(image.cgImage?.height == 16)
+        #expect(image.images == nil)
+    }
+
+    private func encodedImage(
+        size: CGSize,
+        type: String,
+        orientation: Int = 1,
+        smallFirstPage: Bool = false
+    ) throws -> Data {
+        let output = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(output, type as CFString, smallFirstPage ? 2 : 1, nil))
+        let sizes = smallFirstPage ? [CGSize(width: 1, height: 1), size] : [size]
+        for dimensions in sizes {
+            let context = try #require(CGContext(
+                data: nil, width: Int(dimensions.width), height: Int(dimensions.height),
+                bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+            ))
+            context.setFillColor(UIColor.red.cgColor)
+            context.fill(CGRect(origin: .zero, size: dimensions))
+            let image = try #require(context.makeImage())
+            CGImageDestinationAddImage(destination, image, [kCGImagePropertyOrientation: orientation] as CFDictionary)
+        }
+        #expect(CGImageDestinationFinalize(destination))
+        return output as Data
     }
 
     @Test("Given a response, when logging, then it includes URL and status code")
