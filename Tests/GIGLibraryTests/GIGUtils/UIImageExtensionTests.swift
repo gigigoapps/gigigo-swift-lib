@@ -3,12 +3,40 @@ import UIKit
 @testable import GIGLibrary
 
 @MainActor
-// Every test here is pure size math on locally-built images — none touch `ImageDownloader`'s
+// Tests use locally-built images and temporary files — none touch `ImageDownloader`'s
 // shared static state or the `UIImageView.didFinishLocalGifDecodeForTesting` seam. The `loadGif`
 // tests that DO touch that shared state live in `ImageDownloaderTests` (a `.serialized` suite), so
 // this suite needs no serialization and cannot race another suite over global state.
 @Suite("UIImage+Extension")
 struct UIImageExtensionTests {
+
+    @Test("Given valid GIF bytes in a data URL, when using the legacy URL loader, then the non-file input is rejected")
+    func legacyGIFRejectsDataURL() {
+        let url = "data:image/gif;base64," + budgetGIF(delays: [10]).base64EncodedString()
+        #expect(UIImage.gif(url: url) == nil)
+    }
+
+    @Test("Given a non-file URL, when using the legacy GIF loader, then it is rejected",
+          arguments: ["https://example.invalid/image.gif", "HTTP://example.invalid/image.gif",
+                      "ftp://example.invalid/image.gif", "//example.invalid/image.gif",
+                      "image.gif"])
+    func legacyGIFRejectsNonFileURL(url: String) {
+        #expect(UIImage.gif(url: url) == nil)
+    }
+
+    @Test("Given a local GIF file, when using the legacy URL loader, then animation and timing are preserved",
+          arguments: ["file", "FILE"])
+    func legacyGIFLoadsLocalFile(scheme: String) throws {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + " local image.gif")
+        try budgetGIF(delays: [10, 20]).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        let url = scheme + file.absoluteString.dropFirst("file".count)
+        let image = try #require(UIImage.gif(url: url))
+        #expect(image.images?.count == 3)
+        #expect(abs(image.duration - 0.3) < 0.0001)
+    }
 
     @Test("Given a GIF over its resource budget, when decoded, then the whole animation is rejected",
           arguments: ["bytes", "count", "dimensions", "memory", "cumulativeMemory", "duration", "expansion"])

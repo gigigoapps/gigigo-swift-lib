@@ -136,16 +136,13 @@ extension UIImage {
         return UIImage.animatedImageWithSource(source)
     }
     
-    /// Loads a GIF from a URL string by reading its bytes synchronously with `Data(contentsOf:)`.
-    ///
-    /// - Warning: For a **remote** URL this performs blocking network I/O with no timeout,
-    ///   cancellation, or concurrency limit — which the library forbids for downloads. Use
-    ///   `UIImageView.loadGif(urlString:)` (managed, async, cancellable) for remote GIFs, or
-    ///   `gif(data:)` once you already hold the bytes. Kept only for loading a local `file://` URL.
-    @available(*, deprecated, message: "For remote URLs use UIImageView.loadGif(urlString:) (async, cancellable); for bytes you already hold use gif(data:). This does blocking network I/O.")
+    /// Loads a GIF from a local `file://` URL synchronously. Non-file URLs return nil before reading.
+    /// For remote GIFs use `UIImageView.loadGif(urlString:)` (managed, async, cancellable), or
+    /// use `gif(data:)` once you already hold the bytes.
+    @available(*, deprecated, message: "For remote URLs use UIImageView.loadGif(urlString:) (async, cancellable); for bytes you already hold use gif(data:). This performs blocking local file I/O.")
     public class func gif(url: String) -> UIImage? {
         // Validate URL
-        guard let bundleURL = URL(string: url) else {
+        guard let bundleURL = URL(string: url), bundleURL.isFileURL else {
             LogWarn("This image named \"\(url)\" does not exist")
             return nil
         }
