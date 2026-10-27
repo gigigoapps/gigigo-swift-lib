@@ -127,7 +127,7 @@ extension UIImage {
     /// frames or ten minutes. Limits apply equally to network, file and bundled input.
     public class func gif(data: Data) -> UIImage? {
         // Bound compressed input before ImageIO parses it. Oversized GIFs fail as a whole.
-        guard data.count <= 20 * 1024 * 1024 else { return nil }
+        guard data.count <= maximumGIFInputBytes else { return nil }
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
             LogWarn("Source for the image does not exist")
             return nil
@@ -148,7 +148,7 @@ extension UIImage {
         }
 
         // Validate data
-        guard let imageData = try? Data(contentsOf: bundleURL) else {
+        guard let imageData = readGIFData(fileURL: bundleURL) else {
             LogWarn("Cannot turn image named \"\(url)\" into NSData")
             return nil
         }
@@ -165,7 +165,7 @@ extension UIImage {
         }
 
         // Validate data
-        guard let imageData = try? Data(contentsOf: bundleURL) else {
+        guard let imageData = readGIFData(fileURL: bundleURL) else {
             LogWarn("Cannot turn image named \"\(name)\" into NSData")
             return nil
         }
@@ -187,11 +187,31 @@ extension UIImage {
     /// works offline. `@concurrent`/`sending` mirror `decodedGif(name:)`.
     @concurrent
     static func decodedGif(fileURL: URL) async -> sending UIImage? {
-        guard let imageData = try? Data(contentsOf: fileURL) else {
+        guard let imageData = readGIFData(fileURL: fileURL) else {
             LogWarn("Cannot turn image at \"\(fileURL)\" into NSData")
             return nil
         }
         return gif(data: imageData)
+    }
+
+    private static let maximumGIFInputBytes = 20 * 1024 * 1024
+
+    private static func readGIFData(fileURL: URL) -> Data? {
+        guard fileURL.isFileURL, let handle = try? FileHandle(forReadingFrom: fileURL) else { return nil }
+        defer { try? handle.close() }
+        return try? readGIFData(from: handle)
+    }
+
+    /// Bound the actual read, including files that grow after opening. One extra byte detects
+    /// overflow without accepting a truncated animation or trusting a racy file-size preflight.
+    static func readGIFData(from handle: FileHandle) throws -> Data? {
+        var data = Data()
+        while data.count <= maximumGIFInputBytes {
+            let count = min(64 * 1024, maximumGIFInputBytes + 1 - data.count)
+            guard let chunk = try handle.read(upToCount: count), !chunk.isEmpty else { return data }
+            data.append(chunk)
+        }
+        return nil
     }
 
     public func imageProportionally(with size: CGSize) -> UIImage? {
