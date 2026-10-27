@@ -38,6 +38,54 @@ struct UIImageExtensionTests {
         #expect(abs(image.duration - 0.3) < 0.0001)
     }
 
+    @Test("Given a local GIF at or above the byte limit, when loaded, then both APIs enforce the complete-file budget",
+          arguments: [0, 1, 1024 * 1024])
+    func localGIFByteBudget(extraBytes: Int) async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".gif")
+        var data = budgetGIF(delays: [10, 20])
+        data.append(Data(repeating: 0, count: 20 * 1024 * 1024 + extraBytes - data.count))
+        try data.write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        let legacy = UIImage.gif(url: file.absoluteString)
+        let asynchronous = await UIImage.decodedGif(fileURL: file)
+        if extraBytes > 0 {
+            #expect(legacy == nil)
+            #expect(asynchronous == nil)
+        } else {
+            let legacyImage = try #require(legacy)
+            let asynchronousImage = try #require(asynchronous)
+            #expect(legacyImage.images?.count == 3)
+            #expect(asynchronousImage.images?.count == 3)
+            #expect(abs(legacyImage.duration - 0.3) < 0.0001)
+            #expect(abs(asynchronousImage.duration - 0.3) < 0.0001)
+        }
+    }
+
+    @Test("Given an opened file that grows beyond the limit, when read, then only limit plus one bytes are consumed")
+    func growingFileReadIsBounded() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".gif")
+        try budgetGIF(delays: [10, 20]).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let reader = try FileHandle(forReadingFrom: file)
+        defer { try? reader.close() }
+        let writer = try FileHandle(forWritingTo: file)
+        defer { try? writer.close() }
+        // Grow the same opened file without allocating its full size in the test process.
+        try writer.truncate(atOffset: 200 * 1024 * 1024)
+
+        #expect(try UIImage.readGIFData(from: reader) == nil)
+        #expect(try reader.offset() == 20 * 1024 * 1024 + 1)
+    }
+
+    @Test("Given a missing local GIF, when loaded, then both APIs return nil")
+    func missingLocalGIF() async {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".gif")
+        #expect(UIImage.gif(url: file.absoluteString) == nil)
+        let image = await UIImage.decodedGif(fileURL: file)
+        #expect(image == nil)
+    }
+
     @Test("Given a GIF over its resource budget, when decoded, then the whole animation is rejected",
           arguments: ["bytes", "count", "dimensions", "memory", "cumulativeMemory", "duration", "expansion"])
     func rejectsGIFOverBudget(kind: String) {
