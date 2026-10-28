@@ -5,7 +5,7 @@ All notable changes to **GIGLibrary** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.1.0] - 2026-10-28
+## [3.0.1] - 2026-10-28
 
 Security hardening for image loading, Keychain diagnostics and JSON handling,
 plus a public request cache policy. Requirements remain iOS 16+, Swift 6.2 and SPM.
@@ -286,5 +286,5 @@ protection failure, every data race, and dozens of UIKit/networking bugs.
   expanding/collapsing no longer re-parses the HTML each time.
 - Heavy GIF decodes and image resizes run off the main actor.
 
-[3.1.0]: https://github.com/gigigoapps/gigigo-swift-lib/compare/v3.0.0...v3.1.0
+[3.0.1]: https://github.com/gigigoapps/gigigo-swift-lib/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/gigigoapps/gigigo-swift-lib/compare/v2.0.0...v3.0.0
