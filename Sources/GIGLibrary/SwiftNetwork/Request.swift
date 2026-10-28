@@ -73,7 +73,10 @@ public class Request: Selfie, @unchecked Sendable {
     public var standardType: StandardType = .gigigo
     public var timeout: TimeInterval = 15.0
 
-    var cache = NSURLRequest.CachePolicy.useProtocolCachePolicy
+    // Internal opt-in for image downloads; generic requests retain their existing behavior.
+    var maximumResponseBytes: Int?
+
+    public var cache = NSURLRequest.CachePolicy.useProtocolCachePolicy
 
     private var bodyParamsArray: [[String: Any]]?
     private var encodableBodyProvider: (() throws -> Data)?
@@ -242,7 +245,8 @@ public class Request: Selfie, @unchecked Sendable {
                 }
             }
 
-            let operation = Task { try await session.data(for: request) }
+            // The task bridges Request.cancel() to the structured caller's cancellation handler.
+            let operation = Task { try await self.responseData(for: request, session: session) }
             self.installCanceller({ operation.cancel() }, generation: generation)
             defer {
                 self.clearCanceller(generation: generation)
@@ -323,7 +327,7 @@ public class Request: Selfie, @unchecked Sendable {
         do {
             try self.preChecks()
             let request = try self.buildRequest()
-            let (session, generation, ownsSession) = try self.prepareSession(for: request, applyCache: false)
+            let (session, generation, ownsSession) = try self.prepareSession(for: request, applyCache: true)
             defer {
                 if ownsSession {
                     session.finishTasksAndInvalidate()
@@ -543,7 +547,7 @@ public class Request: Selfie, @unchecked Sendable {
     }
 
     private func composeBaseRequest(url: URL) -> URLRequest {
-        var request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: self.timeout)
+        var request = URLRequest(url: url, cachePolicy: self.cache, timeoutInterval: self.timeout)
         request.httpMethod = self.method.rawValue
         request.allHTTPHeaderFields = self.headers
         self.addAcceptHeaderIfNeeded(to: &request)

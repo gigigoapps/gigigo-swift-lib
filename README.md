@@ -23,7 +23,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release history and migration notes.
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/gigigoapps/gigigo-swift-lib.git", .upToNextMajor(from: "3.0.0"))
+    .package(url: "https://github.com/gigigoapps/gigigo-swift-lib.git", .upToNextMajor(from: "3.1.0"))
 ]
 ```
 

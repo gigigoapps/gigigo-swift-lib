@@ -4,6 +4,94 @@ import Testing
 
 @Suite(.serialized)
 struct RequestTests {
+    @Test("Given a large bounded body, when received in chunks, then all bytes are preserved")
+    func boundedResponsePreservesLargeBody() async {
+        let body = Data(repeating: 65, count: 4 * 1024 * 1024)
+        MockURLProtocol.respond(path: "/bounded-large", data: body)
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: "/bounded-large", standard: .basic)
+        request.maximumResponseBytes = body.count
+        let response = await request.fetch()
+        #expect(response.status == .success)
+        #expect(response.body == body)
+    }
+
+    @Test("Given an in-flight bounded request, when cancelled, then reception stops with a cancelled response",
+          arguments: [false, true])
+    func boundedResponseCanBeCancelled(viaRequest: Bool) async throws {
+        var startContinuation: AsyncStream<Void>.Continuation?
+        let started = AsyncStream<Void> { startContinuation = $0 }
+        let signal = try #require(startContinuation)
+        defer { signal.finish() }
+        MockURLProtocol.respond(path: "/bounded-cancel", data: Data("image".utf8), delay: 10) { _ in
+            signal.yield(())
+        }
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: "/bounded-cancel")
+        request.maximumResponseBytes = 8
+        let task = Task { await request.fetch() }
+        for await _ in started { break }
+        if viaRequest { request.cancel() } else { task.cancel() }
+        let response = await task.value
+        #expect(response.error?.code == URLError.cancelled.rawValue)
+    }
+
+    @Test("Given a download cache policy, when saving a file, then both the request and session honor it",
+          arguments: [NSURLRequest.CachePolicy.useProtocolCachePolicy, .reloadIgnoringLocalCacheData])
+    func downloadUsesConfiguredCachePolicy(policy: NSURLRequest.CachePolicy) async throws {
+        let configuration = URLSessionConfiguration.testConfiguration()
+        configuration.urlCache = URLCache(memoryCapacity: 1024, diskCapacity: 0)
+        var capturedPolicy: URLRequest.CachePolicy?
+        let body = Data("fresh file".utf8)
+        MockURLProtocol.respond(path: "/download-cache-policy", data: body) { request in
+            capturedPolicy = request.cachePolicy
+        }
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: "/download-cache-policy",
+                                          sessionConfiguration: configuration)
+        request.cache = policy
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: destination) }
+        let response = await request.fetch(downloadTo: destination)
+        #expect(response.status == .success)
+        #expect(capturedPolicy == policy)
+        #expect(configuration.requestCachePolicy == policy)
+        #expect((configuration.urlCache == nil) == (policy == .reloadIgnoringLocalCacheData))
+        #expect(try Data(contentsOf: destination) == body)
+    }
+
+    @Test("Given a bounded image request, when actual bytes exceed its budget, then it fails even without an accurate length",
+          arguments: [nil, "1", "100000"] as [String?])
+    func boundedResponseRejectsOverflow(contentLength: String?) async {
+        let path = "/bounded-overflow-" + (contentLength ?? "unknown")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [UnfinishedImageURLProtocol.self]
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: path,
+                                          timeout: 2, sessionConfiguration: configuration)
+        request.maximumResponseBytes = 32768
+        let response = await request.fetch()
+        #expect(response.error?.code == URLError.Code.dataLengthExceedsMaximum.rawValue)
+        #expect(response.status != .success)
+    }
+
+    @Test("Given a bounded request, when the body reaches exactly the budget, then all bytes are returned")
+    func boundedResponsePreservesBodyAtLimit() async {
+        let body = Data(repeating: 65, count: 8)
+        MockURLProtocol.respond(path: "/bounded-exact", data: body)
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: "/bounded-exact", standard: .basic)
+        request.maximumResponseBytes = 8
+        let response = await request.fetch()
+        #expect(response.status == .success)
+        #expect(response.body == body)
+    }
+
+    @Test("Given a generic request, when no image budget is selected, then the body remains unrestricted")
+    func genericResponseRemainsUnbounded() async {
+        let body = Data(repeating: 65, count: 32)
+        MockURLProtocol.respond(path: "/unbounded-control", data: body)
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: "/unbounded-control", standard: .basic)
+        let response = await request.fetch()
+        #expect(response.status == .success)
+        #expect(response.body == body)
+    }
+
     @Test("Given a POST request with body params, when fetch is called, then URL, headers, and body are built correctly")
     func fetchBuildsRequestWithBodyParams() async throws {
         // Given
@@ -910,8 +998,9 @@ struct RequestTests {
         #expect(didReceiveRequest == false)
     }
 
-    @Test("Given a caller-injected URLSession, when fetch is called more than once, then the session is not invalidated and every call succeeds")
-    func fetchDoesNotInvalidateInjectedSession() async {
+    @Test("Given a caller-injected URLSession, when fetch is called more than once, then the session is not invalidated and every call succeeds",
+          arguments: [false, true])
+    func fetchDoesNotInvalidateInjectedSession(bounded: Bool) async {
         // Given a caller-owned session (C060: the fetch flow must not finishTasksAndInvalidate it,
         // unlike the sessions it creates internally from a sessionConfiguration).
         MockURLProtocol.respond(path: "/injected-session") { _ in }
@@ -928,6 +1017,8 @@ struct RequestTests {
             reachability: MockReachabilityProvider(reachable: true)
         )
 
+        request.maximumResponseBytes = bounded ? 8 : nil
+
         // When the same caller-owned session is reused across two fetches
         let first = await request.fetch()
         let second = await request.fetch()
@@ -937,4 +1028,23 @@ struct RequestTests {
         #expect(first.status == .success)
         #expect(second.status == .success)
     }
+}
+
+// Deliberately never completes the response: the client must reject while reception is ongoing.
+private final class UnfinishedImageURLProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let length = request.url!.lastPathComponent.replacingOccurrences(of: "bounded-overflow-", with: "")
+        var headers = ["Content-Type": "application/octet-stream"]
+        if length != "unknown" { headers["Content-Length"] = length }
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: headers)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        // Cross Foundation's initial transport buffer without finishing the response.
+        client?.urlProtocol(self, didLoad: Data(repeating: 65, count: 32768))
+        client?.urlProtocol(self, didLoad: Data(repeating: 65, count: 32769))
+    }
+
+    override func stopLoading() {}
 }

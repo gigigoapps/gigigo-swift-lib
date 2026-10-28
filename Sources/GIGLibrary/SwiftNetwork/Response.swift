@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import ImageIO
 import UIKit
 
 
@@ -139,11 +140,39 @@ public class Response: Selfie, @unchecked Sendable {
             return image
         }
 
-        guard let image = UIImage(data: imageData, scale: scale) else {
+        guard Self.hasBoundedImagePixels(imageData),
+              let image = UIImage(data: imageData, scale: scale) else {
             throw ResponseError.unexpectedDataType
         }
         return image
 	}
+
+    /// Keep UIKit's scale/orientation and format behavior, but preflight every frame without
+    /// decoding or caching pixels. Checking only frame zero would leave animated/multipage
+    /// formats able to hide an oversized frame. Match the existing GIF memory policy.
+    private static func hasBoundedImagePixels(_ data: Data) -> Bool {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard data.count <= 20 * 1024 * 1024,
+              let source = CGImageSourceCreateWithData(data as CFData, options) else { return false }
+        let count = CGImageSourceGetCount(source)
+        guard count > 0, count <= 200 else { return false }
+        var remainingBytes = 64 * 1024 * 1024
+        for index in 0..<count {
+            guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, options) as? [String: Any],
+                  let width = (properties[kCGImagePropertyPixelWidth as String] as? NSNumber)?.doubleValue,
+                  let height = (properties[kCGImagePropertyPixelHeight as String] as? NSNumber)?.doubleValue,
+                  width.isFinite, height.isFinite,
+                  width >= 1, height >= 1, width <= 4096, height <= 4096,
+                  width.rounded(.down) == width, height.rounded(.down) == height else { return false }
+            // Eight bytes per pixel conservatively includes high precision color. Round rows
+            // up for alignment before accounting for all frames, without integer overflow.
+            let rowBytes = ((Int(width) * 8 + 63) / 64) * 64
+            let bytes = rowBytes * Int(height)
+            guard bytes <= remainingBytes else { return false }
+            remainingBytes -= bytes
+        }
+        return true
+    }
 
     // MARK: - Internal API
     

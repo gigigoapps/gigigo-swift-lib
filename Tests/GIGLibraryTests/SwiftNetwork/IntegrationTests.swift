@@ -1093,6 +1093,43 @@ struct SwiftNetworkIntegrationTests {
         #expect(profile == Profile(id: 101, name: "Sample"))
     }
 
+    @Test("Given a scalar gigigo payload, when decoding a compatible model, then its value is preserved",
+          arguments: ["null", "true", "42", "\"text\""])
+    func fetchDecodablePreservesScalarPayload(source: String) async throws {
+        let endpoint = "/decodable-scalar"
+        MockURLProtocol.respond(path: endpoint, statusCode: 200, headers: ["Content-Type": "application/json"],
+                                data: Data("{\"status\":true,\"data\":\(source)}".utf8))
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: endpoint)
+        switch source {
+        case "null":
+            let value: String? = try await request.fetchDecodable()
+            #expect(value == nil)
+        case "true":
+            let value: Bool = try await request.fetchDecodable()
+            #expect(value)
+        case "42":
+            let value: Int = try await request.fetchDecodable()
+            #expect(value == 42)
+        default:
+            let value: String = try await request.fetchDecodable()
+            #expect(value == "text")
+        }
+    }
+
+    @Test("Given a scalar gigigo payload, when decoding an incompatible model, then a controlled decoding error is thrown",
+          arguments: ["null", "true", "42", "\"text\""])
+    func fetchDecodableRejectsIncompatibleScalarPayload(source: String) async {
+        let endpoint = "/decodable-incompatible-scalar"
+        MockURLProtocol.respond(path: endpoint, statusCode: 200, headers: ["Content-Type": "application/json"],
+                                data: Data("{\"status\":true,\"data\":\(source)}".utf8))
+        let request = Request.testRequest(baseUrl: "https://example.com", endpoint: endpoint)
+        await assertThrowsFetchDecodableError({
+            let _: Profile = try await request.fetchDecodable()
+        }, assertion: { error in
+            guard case .decodingFailed = error else { return #expect(Bool(false)) }
+        })
+    }
+
     @Test("Given a basic success fixture, when fetchDecodable is called, then it decodes from root body")
     func fetchDecodableDecodesBasicPayload() async throws {
         // Given

@@ -122,8 +122,12 @@ extension UIImage {
         }
     }
     
+    /// Returns nil when the animation exceeds 20 MiB of input, 200 source frames,
+    /// 4096 pixels per dimension, 64 MiB of estimated pixel storage, 2000 expanded
+    /// frames or ten minutes. Limits apply equally to network, file and bundled input.
     public class func gif(data: Data) -> UIImage? {
-        // Create source from data
+        // Bound compressed input before ImageIO parses it. Oversized GIFs fail as a whole.
+        guard data.count <= maximumGIFInputBytes else { return nil }
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
             LogWarn("Source for the image does not exist")
             return nil
@@ -132,22 +136,19 @@ extension UIImage {
         return UIImage.animatedImageWithSource(source)
     }
     
-    /// Loads a GIF from a URL string by reading its bytes synchronously with `Data(contentsOf:)`.
-    ///
-    /// - Warning: For a **remote** URL this performs blocking network I/O with no timeout,
-    ///   cancellation, or concurrency limit — which the library forbids for downloads. Use
-    ///   `UIImageView.loadGif(urlString:)` (managed, async, cancellable) for remote GIFs, or
-    ///   `gif(data:)` once you already hold the bytes. Kept only for loading a local `file://` URL.
-    @available(*, deprecated, message: "For remote URLs use UIImageView.loadGif(urlString:) (async, cancellable); for bytes you already hold use gif(data:). This does blocking network I/O.")
+    /// Loads a GIF from a local `file://` URL synchronously. Non-file URLs return nil before reading.
+    /// For remote GIFs use `UIImageView.loadGif(urlString:)` (managed, async, cancellable), or
+    /// use `gif(data:)` once you already hold the bytes.
+    @available(*, deprecated, message: "For remote URLs use UIImageView.loadGif(urlString:) (async, cancellable); for bytes you already hold use gif(data:). This performs blocking local file I/O.")
     public class func gif(url: String) -> UIImage? {
         // Validate URL
-        guard let bundleURL = URL(string: url) else {
+        guard let bundleURL = URL(string: url), bundleURL.isFileURL else {
             LogWarn("This image named \"\(url)\" does not exist")
             return nil
         }
 
         // Validate data
-        guard let imageData = try? Data(contentsOf: bundleURL) else {
+        guard let imageData = readGIFData(fileURL: bundleURL) else {
             LogWarn("Cannot turn image named \"\(url)\" into NSData")
             return nil
         }
@@ -164,7 +165,7 @@ extension UIImage {
         }
 
         // Validate data
-        guard let imageData = try? Data(contentsOf: bundleURL) else {
+        guard let imageData = readGIFData(fileURL: bundleURL) else {
             LogWarn("Cannot turn image named \"\(name)\" into NSData")
             return nil
         }
@@ -186,11 +187,31 @@ extension UIImage {
     /// works offline. `@concurrent`/`sending` mirror `decodedGif(name:)`.
     @concurrent
     static func decodedGif(fileURL: URL) async -> sending UIImage? {
-        guard let imageData = try? Data(contentsOf: fileURL) else {
+        guard let imageData = readGIFData(fileURL: fileURL) else {
             LogWarn("Cannot turn image at \"\(fileURL)\" into NSData")
             return nil
         }
         return gif(data: imageData)
+    }
+
+    private static let maximumGIFInputBytes = 20 * 1024 * 1024
+
+    private static func readGIFData(fileURL: URL) -> Data? {
+        guard fileURL.isFileURL, let handle = try? FileHandle(forReadingFrom: fileURL) else { return nil }
+        defer { try? handle.close() }
+        return try? readGIFData(from: handle)
+    }
+
+    /// Bound the actual read, including files that grow after opening. One extra byte detects
+    /// overflow without accepting a truncated animation or trusting a racy file-size preflight.
+    static func readGIFData(from handle: FileHandle) throws -> Data? {
+        var data = Data()
+        while data.count <= maximumGIFInputBytes {
+            let count = min(64 * 1024, maximumGIFInputBytes + 1 - data.count)
+            guard let chunk = try handle.read(upToCount: count), !chunk.isEmpty else { return data }
+            data.append(chunk)
+        }
+        return nil
     }
 
     public func imageProportionally(with size: CGSize) -> UIImage? {
@@ -204,10 +225,29 @@ extension UIImage {
         // `UIGraphicsImageRenderer` replaces the deprecated UIGraphics* context API. It does not
         // require the main actor (the `ImageDownloader` caller runs the resize on a detached task),
         // and its default format uses the device screen scale, matching the previous `scale: 0.0`.
-        let renderer = UIGraphicsImageRenderer(size: newSize)
+        let format = UIGraphicsImageRendererFormat.default()
+        // Check the actual backing pixels before allocating. Keep the original image on budget
+        // overflow, just as for degenerate sizes; do not change normal aspect-fill dimensions.
+        guard UIImage.isWithinResizeBudget(size: newSize, scale: format.scale) else {
+            return self
+        }
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
         return renderer.image { _ in
             self.draw(in: CGRect(origin: .zero, size: newSize))
         }
+    }
+
+    /// Cap each backing dimension and reserve eight bytes per pixel (including extended-range
+    /// formats) within 64 MiB. Round up fractional pixels before checking the allocation budget.
+    static func isWithinResizeBudget(size: CGSize, scale: CGFloat) -> Bool {
+        guard scale.isFinite, scale > 0,
+              size.width.isFinite, size.width > 0,
+              size.height.isFinite, size.height > 0 else { return false }
+        let width = ceil(size.width * scale)
+        let height = ceil(size.height * scale)
+        guard width.isFinite, height.isFinite,
+              width <= 4096, height <= 4096 else { return false }
+        return width * height <= (64 * 1024 * 1024) / 8
     }
 
     /// Computes the aspect-fill size that scales `source` to cover `target`, or `nil` when the
@@ -241,35 +281,19 @@ extension UIImage {
     // MARK: - Private Helpers
     
     internal class func delayForImageAtIndex(_ index: Int, source: CGImageSource) -> Double {
-        var delay = 0.1
-        // Get dictionaries
-        let cfProperties = CGImageSourceCopyPropertiesAtIndex(source, index, nil)
-        let gifPropertiesPointer = UnsafeMutablePointer<UnsafeRawPointer?>.allocate(capacity: 0)
-        if CFDictionaryGetValueIfPresent(
-            cfProperties,
-            Unmanaged.passUnretained(kCGImagePropertyGIFDictionary).toOpaque(),
-            gifPropertiesPointer
-        ) == false {
-            return delay
+        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [String: Any],
+              let gif = properties[kCGImagePropertyGIFDictionary as String] as? [String: Any] else {
+            return 0.1
         }
-        let gifProperties: CFDictionary = unsafeBitCast(gifPropertiesPointer.pointee, to: CFDictionary.self)
-        // Get delay time
-        var delayObject: AnyObject = unsafeBitCast(
-            CFDictionaryGetValue(
-                gifProperties,
-                Unmanaged.passUnretained(kCGImagePropertyGIFUnclampedDelayTime).toOpaque()),
-            to: AnyObject.self)
-        if delayObject.doubleValue == 0 {
-            delayObject = unsafeBitCast(CFDictionaryGetValue(
-                gifProperties,
-                Unmanaged.passUnretained(kCGImagePropertyGIFDelayTime).toOpaque()),
-                                        to: AnyObject.self)
+        let unclamped = (gif[kCGImagePropertyGIFUnclampedDelayTime as String] as? NSNumber)?.doubleValue
+        let clamped = (gif[kCGImagePropertyGIFDelayTime as String] as? NSNumber)?.doubleValue
+        let delay: Double
+        if let unclamped, unclamped != 0 {
+            delay = unclamped
+        } else {
+            delay = clamped ?? 0.1
         }
-        delay = delayObject as? Double ?? 0
-        if delay < 0.1 {
-            delay = 0.1 // Make sure they're not too fast
-        }
-        return delay
+        return max(0.1, delay)
     }
     
     internal class func gcdForPair(_ aVar: Int?, _ bVar: Int?) -> Int {
@@ -301,49 +325,83 @@ extension UIImage {
     }
     
     internal class func animatedImageWithSource(_ source: CGImageSource) -> UIImage? {
-        let count = CGImageSourceGetCount(source)
-        var images = [CGImage]()
-        var delays = [Int]()
-        // Fill arrays. Keep `images` and `delays` aligned: a frame that fails to decode is skipped
-        // entirely instead of appending a delay without an image. Otherwise a partially corrupt GIF
-        // desyncs the arrays and the frame loop below traps on `images[i]` out of range — a path now
-        // reachable from untrusted network data via `Response.image()`.
-        for i in 0..<count {
-            // Add image
-            guard let image = CGImageSourceCreateImageAtIndex(source, i, nil) else { continue }
-            images.append(image)
-            // At it's delay in cs
-            let delaySeconds = UIImage.delayForImageAtIndex(Int(i),
-                                                            source: source)
-            delays.append(Int(delaySeconds * 1000.0)) // Seconds to ms
-        }
-        guard !images.isEmpty else { return nil }
-        // Calculate full duration
-        let duration: Int = {
-            var sum = 0
-
-            for val: Int in delays {
-                sum += val
-            }
-
-            return sum
-        }()
-        // Get frames
+        guard let delays = boundedGIFDelays(source) else { return nil }
+        let duration = delays.reduce(0, +)
+        guard duration <= 600_000 else { return nil }
         let gcd = gcdForArray(delays)
-        var frames = [UIImage]()
-        var frame: UIImage
-        var frameCount: Int
-        for i in 0..<images.count {
-            frame = UIImage(cgImage: images[i])
-            frameCount = Int(delays[i] / gcd)
+        let expandedCount = delays.reduce(0) { $0 + $1 / gcd }
+        guard expandedCount <= 2_000 else { return nil }
 
-            for _ in 0..<frameCount {
+        var frames = [UIImage]()
+        frames.reserveCapacity(expandedCount)
+        var decodedDuration = 0
+        var decodedBytes = 0
+        for index in delays.indices {
+            // Preserve the existing behavior of skipping an undecodable frame.
+            guard let image = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
+            guard image.width <= 4096, image.height <= 4096,
+                  image.bytesPerRow <= 4096 * 8 else { return nil }
+            decodedBytes += image.bytesPerRow * image.height
+            guard decodedBytes <= 64 * 1024 * 1024 else { return nil }
+            let frame = UIImage(cgImage: image)
+            for _ in 0..<(delays[index] / gcd) {
                 frames.append(frame)
             }
+            decodedDuration += delays[index]
         }
-        return UIImage.animatedImage(
-            with: frames,
-            duration: Double(duration) / 1000.0)
+        guard !frames.isEmpty else { return nil }
+        return UIImage.animatedImage(with: frames, duration: Double(decodedDuration) / 1000)
+    }
+
+    private class func boundedGIFDelays(_ source: CGImageSource) -> [Int]? {
+        // Preflight all metadata before decoding: limits bound both pixel storage and the
+        // repeated references used to preserve unequal frame delays. No partial animation on failure.
+        let count = CGImageSourceGetCount(source)
+        guard count > 0, count <= 200,
+              let canvas = CGImageSourceCopyProperties(source, nil) as? [String: Any],
+              let canvasSize = boundedGIFCanvasSize(canvas, source: source) else { return nil }
+        var delays = [Int]()
+        var estimatedBytes = 0
+        for index in 0..<count {
+            guard let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [String: Any],
+                  let size = boundedGIFSize(properties) else { return nil }
+            // ImageIO can composite a subframe onto the logical canvas; account for both.
+            estimatedBytes += max(canvasSize.width, size.width) * max(canvasSize.height, size.height) * 8
+            guard estimatedBytes <= 64 * 1024 * 1024 else { return nil }
+            let delay = delayForImageAtIndex(index, source: source)
+            guard delay.isFinite, delay >= 0.1, delay <= 600 else { return nil }
+            delays.append(Int(delay * 1000))
+        }
+        return delays
+    }
+
+    private class func boundedGIFCanvasSize(
+        _ properties: [String: Any],
+        source: CGImageSource
+    ) -> (width: Int, height: Int)? {
+        if let gif = properties[kCGImagePropertyGIFDictionary as String] as? [String: Any] {
+            // GIF logical canvas dimensions live in the format dictionary, not at the top level.
+            guard let width = gif[kCGImagePropertyGIFCanvasPixelWidth as String],
+                  let height = gif[kCGImagePropertyGIFCanvasPixelHeight as String] else { return nil }
+            return boundedGIFSize([
+                kCGImagePropertyPixelWidth as String: width,
+                kCGImagePropertyPixelHeight as String: height
+            ])
+        }
+        // Preserve decoding of other ImageIO formats passed to this legacy API (e.g. a PNG
+        // served at a .gif URL). Their dimensions may only be available on the first frame.
+        if let size = boundedGIFSize(properties) { return size }
+        guard let frame = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] else { return nil }
+        return boundedGIFSize(frame)
+    }
+
+    private class func boundedGIFSize(_ properties: [String: Any]) -> (width: Int, height: Int)? {
+        guard let width = (properties[kCGImagePropertyPixelWidth as String] as? NSNumber)?.doubleValue,
+              let height = (properties[kCGImagePropertyPixelHeight as String] as? NSNumber)?.doubleValue,
+              width.isFinite, height.isFinite,
+              width >= 1, height >= 1, width <= 4096, height <= 4096,
+              width.rounded(.down) == width, height.rounded(.down) == height else { return nil }
+        return (Int(width), Int(height))
     }
     
     

@@ -5,6 +5,48 @@ All notable changes to **GIGLibrary** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-10-28
+
+Security hardening for image loading, Keychain diagnostics and JSON handling,
+plus a public request cache policy. Requirements remain iOS 16+, Swift 6.2 and SPM.
+
+### Security
+
+- Bound managed remote image downloads to **20 MiB** while receiving bytes,
+  including responses with missing or inaccurate `Content-Length`. Generic
+  `Request` responses retain their existing, unrestricted behavior.
+- Bound GIF input from data, local files and bundled resources to **20 MiB**.
+  Local reads stop after detecting overflow rather than loading the whole file.
+  Before decoding, validate at most **200 source frames**, **4096 pixels per
+  dimension**, **64 MiB** of estimated pixel storage, **2000 expanded frames**
+  and **10 minutes** of total animation. Oversized animations return `nil`.
+- Preflight static and other non-GIF images in `Response.image()` before UIKit
+  decoding: **20 MiB** of input, **200 frames**, **4096 pixels per dimension**
+  and a conservative **64 MiB** pixel budget across all frames. Images outside
+  these limits throw `ResponseError.unexpectedDataType`.
+- Bound image resize allocations to **4096 backing pixels per dimension** and
+  a conservative **64 MiB** pixel budget. An oversized resize returns the
+  original image.
+- `KeychainStore.description` and `debugDescription` now return
+  `KeychainStore(<redacted>)` without querying or exposing stored contents.
+- JSON array subscripts now return `nil` for negative and out-of-range indices.
+  JSON serialization supports scalar fragments and rejects unsupported values
+  before Foundation can raise an exception.
+
+### Added
+
+- Public `Request.cache` lets consumers select an `NSURLRequest.CachePolicy`.
+  The policy is applied to URL requests and library-created sessions, including
+  `fetch(downloadTo:)`.
+
+### Changed
+
+- **Migration note:** deprecated `UIImage.gif(url:)` now accepts only local
+  `file://` URLs; remote URLs return `nil` without performing network I/O.
+  Use `UIImageView.loadGif(urlString:)` for remote GIFs or `UIImage.gif(data:)`
+  when the bytes are already available. Check image assets against the new
+  resource limits before upgrading.
+
 ## [3.0.0] - 2026-07-03
 
 Major modernization release covering everything since 2.0.0 (Nov 2024): the
@@ -244,4 +286,5 @@ protection failure, every data race, and dozens of UIKit/networking bugs.
   expanding/collapsing no longer re-parses the HTML each time.
 - Heavy GIF decodes and image resizes run off the main actor.
 
+[3.1.0]: https://github.com/gigigoapps/gigigo-swift-lib/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/gigigoapps/gigigo-swift-lib/compare/v2.0.0...v3.0.0

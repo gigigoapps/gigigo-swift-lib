@@ -22,7 +22,7 @@ public final class JSON: Sequence, CustomStringConvertible {
 	private let json: Any
 	
 	public var description: String {
-		if let data = try? JSONSerialization.data(withJSONObject: self.json, options: .prettyPrinted) as Data {
+		if let data = try? self.serializedData(options: .prettyPrinted) {
 			if let description = String(data: data, encoding: String.Encoding.utf8) {
 				return description
 			}
@@ -56,7 +56,7 @@ public final class JSON: Sequence, CustomStringConvertible {
 	}
     
     public subscript(index: Int) -> JSON? {
-        guard let array = self.json as? [Any], array.count > index else { return nil }
+        guard let array = self.json as? [Any], array.indices.contains(index) else { return nil }
         
         return JSON(from: array[index])
     }
@@ -72,13 +72,29 @@ public final class JSON: Sequence, CustomStringConvertible {
 	
 	public func toData() -> Data? {
 		do {
-			return try JSONSerialization.data(withJSONObject: self.json)
+			return try self.serializedData()
 		} catch let error as NSError {
 			LogError(error)
 			return nil
 		}
 	}
 	
+	private func serializedData(options: JSONSerialization.WritingOptions = []) throws -> Data? {
+		// Validate leaves without adding a container level to Foundation's depth limit.
+		// Unsupported values must be rejected before the writer can raise NSException.
+		var pendingValues = [self.json]
+		while let value = pendingValues.popLast() {
+			if let array = value as? [Any] {
+				pendingValues.append(contentsOf: array)
+			} else if let dictionary = value as? [String: Any] {
+				pendingValues.append(contentsOf: dictionary.values)
+			} else if !JSONSerialization.isValidJSONObject([value]) {
+				return nil
+			}
+		}
+		return try JSONSerialization.data(withJSONObject: self.json, options: options.union(.fragmentsAllowed))
+	}
+
 	public func toBool() -> Bool? {
 		return self.json as? Bool
 	}

@@ -57,3 +57,29 @@ struct JSONSubscriptTests {
 		#expect(arrayJSON["anything"] == nil)
 	}
 }
+
+@Suite("JSON integer subscript")
+struct JSONIntegerSubscriptTests {
+    @Test("Given an invalid index, when accessing an array, then returns nil",
+          arguments: [Int.min, -1, 0, 1, 2, Int.max])
+    func invalidIndicesReturnNil(index: Int) {
+        let empty = JSON(from: [Int]())
+        #expect(empty[index] == nil)
+        if index < 0 || index >= 2 {
+            #expect(JSON(from: [10, 20])[index] == nil)
+        }
+    }
+
+    @Test("Given a valid index, when accessing an array, then returns its value",
+          arguments: [0, 1])
+    func validIndicesReturnValues(index: Int) {
+        #expect(JSON(from: [10, 20])[index]?.toInt() == [10, 20][index])
+    }
+
+    @Test("Given a non-array root, when accessing an index, then returns nil",
+          arguments: [Int.min, -1, 0, Int.max])
+    func nonArrayRootReturnsNil(index: Int) {
+        #expect(JSON(from: ["key": "value"])[index] == nil)
+        #expect(JSON(from: "value")[index] == nil)
+    }
+}
